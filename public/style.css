@@ -221,11 +221,13 @@ textarea { resize: vertical; }
 /* ===== AVATAR ===== */
 .avatar-circle {
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-weight: 700; color: #fff; flex-shrink: 0; cursor: default;
+  font-weight: 700; color: #fff; flex-shrink: 0;
   text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  background: #6c63ff; /* fallback until JS sets the real color */
+  background-size: cover; background-position: center;
 }
-.avatar-circle.large { width: 72px; height: 72px; font-size: 28px; }
-.avatar-circle.small { width: 40px; height: 40px; font-size: 15px; }
+.avatar-circle.large  { width: 72px; height: 72px; font-size: 28px; }
+.avatar-circle.small  { width: 40px; height: 40px; font-size: 15px; }
 .avatar-circle.xsmall { width: 32px; height: 32px; font-size: 12px; }
 
 /* ===== ROLE BADGES ===== */

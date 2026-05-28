@@ -159,14 +159,14 @@
 
     function setAvatarEl(el, user) {
       if (user.avatar_data) {
+        el.style.backgroundColor = 'transparent';
         el.style.backgroundImage = `url(${user.avatar_data})`;
         el.style.backgroundSize = 'cover';
         el.style.backgroundPosition = 'center';
-        el.style.background = '';
         el.textContent = '';
       } else {
-        el.style.backgroundImage = '';
-        el.style.background = user.avatar_color;
+        el.style.backgroundImage = 'none';
+        el.style.backgroundColor = user.avatar_color || '#6c63ff';
         el.textContent = user.username[0].toUpperCase();
       }
     }

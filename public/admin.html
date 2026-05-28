@@ -19,7 +19,6 @@
       <button class="nav-tab" id="anav-users" onclick="showSection('users', event)">Пользователи</button>
       <button class="nav-tab" id="anav-videos" onclick="showSection('videos', event)">Видео</button>
       <button class="nav-tab" id="anav-chat" onclick="showSection('chat', event)">💬 Чат</button>
-      <button class="nav-tab" id="anav-myprofile" onclick="showSection('myprofile', event)">Мой профиль</button>
     </div>
     <div class="nav-right">
       <span id="liveIndicator" class="live-dot" title="Реальное время"></span>
@@ -37,7 +36,7 @@
     <button onclick="showSection('users', null); closeMobileMenu()">👥 Пользователи</button>
     <button onclick="showSection('videos', null); closeMobileMenu()">📹 Видео</button>
     <button onclick="showSection('chat', null); closeMobileMenu()">💬 Чат</button>
-    <button onclick="showSection('myprofile', null); closeMobileMenu()">👤 Мой профиль</button>
+    <button onclick="showSection('myprofile', null); closeMobileMenu()">👤 Профиль</button>
     <hr class="mobile-divider">
     <button onclick="logout()" class="mobile-menu-logout">🚪 Выйти</button>
   </div>
@@ -234,15 +233,15 @@
 
     function setAvatar(el, user) {
       if (user.avatar_data) {
+        el.style.backgroundColor = 'transparent';
         el.style.backgroundImage = `url(${user.avatar_data})`;
         el.style.backgroundSize = 'cover';
         el.style.backgroundPosition = 'center';
         el.textContent = '';
-        el.style.background = '';
       } else {
-        el.style.backgroundImage = '';
+        el.style.backgroundImage = 'none';
         el.textContent = user.username[0].toUpperCase();
-        el.style.background = user.avatar_color;
+        el.style.backgroundColor = user.avatar_color || '#6c63ff';
       }
     }
 
