@@ -297,6 +297,12 @@ app.get('/api/admin/stream', auth, adminOnly, (req, res) => {
   req.on('close', () => { clearInterval(heartbeat); sseClients.delete(client); });
 });
 
+// Online users
+app.get('/api/online', auth, async (req, res) => {
+  const ids = [...wss.clients].filter(c => c.readyState === 1 && c.userId).map(c => c.userId);
+  res.json({ count: ids.length, ids: [...new Set(ids)] });
+});
+
 // Chat REST: get history
 app.get('/api/chat/messages', auth, async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM messages ORDER BY created_at ASC LIMIT 100');

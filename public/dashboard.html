@@ -13,18 +13,27 @@
       <div class="logo-icon small">S</div>
       <span>Smart Skill</span>
     </div>
-    <button class="burger" onclick="toggleMobileMenu()" id="burgerBtn">☰</button>
-    <div class="nav-tabs" id="navTabs">
+    <!-- Desktop nav -->
+    <div class="nav-tabs">
       <button class="nav-tab" id="tab-btn-videos" onclick="showTab('videos', event)">Видео</button>
       <button class="nav-tab" id="tab-btn-chat" onclick="showTab('chat', event)">💬 Чат <span id="onlineBadge" class="online-badge"></span></button>
       <button class="nav-tab" id="tab-btn-profile" onclick="showTab('profile', event)">Профиль</button>
-      <button onclick="logout()" class="btn-logout mobile-logout">Выйти</button>
     </div>
-    <div class="nav-right desktop-right">
+    <div class="nav-right">
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
+      <button class="burger" onclick="toggleMobileMenu()">☰</button>
     </div>
   </nav>
+
+  <!-- Mobile dropdown (separate from desktop nav) -->
+  <div id="mobileDropdown" class="mobile-dropdown">
+    <button onclick="showTab('videos', null); closeMobileMenu()">📹 Видео</button>
+    <button onclick="showTab('chat', null); closeMobileMenu()">💬 Чат</button>
+    <button onclick="showTab('profile', null); closeMobileMenu()">👤 Профиль</button>
+    <button onclick="logout()" class="mobile-menu-logout">🚪 Выйти</button>
+  </div>
+  <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
 
   <main class="main-content">
 
@@ -116,25 +125,12 @@
     }
 
     function toggleMobileMenu() {
-      const tabs = document.getElementById('navTabs');
-      tabs.classList.toggle('mobile-open');
-      // overlay to close on outside click
-      let overlay = document.getElementById('menuOverlay');
-      if (tabs.classList.contains('mobile-open')) {
-        if (!overlay) {
-          overlay = document.createElement('div');
-          overlay.id = 'menuOverlay';
-          overlay.style.cssText = 'position:fixed;inset:56px 0 0 0;z-index:9998;';
-          overlay.onclick = closeMobileMenu;
-          document.body.appendChild(overlay);
-        }
-      } else {
-        overlay?.remove();
-      }
+      document.getElementById('mobileDropdown').classList.toggle('open');
+      document.getElementById('mobileOverlay').classList.toggle('open');
     }
     function closeMobileMenu() {
-      document.getElementById('navTabs').classList.remove('mobile-open');
-      document.getElementById('menuOverlay')?.remove();
+      document.getElementById('mobileDropdown').classList.remove('open');
+      document.getElementById('mobileOverlay').classList.remove('open');
     }
 
     async function loadProfile() {

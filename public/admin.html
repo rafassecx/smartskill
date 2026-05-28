@@ -13,21 +13,32 @@
       <div class="logo-icon small admin">S</div>
       <span>Smart Skill <span class="admin-label">Админ</span></span>
     </div>
-    <button class="burger" onclick="toggleAdminMenu()" id="adminBurger">☰</button>
+    <!-- Desktop nav -->
     <div class="nav-tabs" id="adminNavTabs">
-      <button class="nav-tab active" onclick="showSection('dashboard', event)">Обзор</button>
-      <button class="nav-tab" onclick="showSection('users', event)">Пользователи</button>
-      <button class="nav-tab" onclick="showSection('videos', event)">Видео</button>
-      <button class="nav-tab" onclick="showSection('chat', event)">💬 Чат</button>
-      <button class="nav-tab" onclick="showSection('myprofile', event)">Мой профиль</button>
-      <button onclick="logout()" class="btn-logout mobile-logout">Выйти</button>
+      <button class="nav-tab active" id="anav-dashboard" onclick="showSection('dashboard', event)">Обзор</button>
+      <button class="nav-tab" id="anav-users" onclick="showSection('users', event)">Пользователи</button>
+      <button class="nav-tab" id="anav-videos" onclick="showSection('videos', event)">Видео</button>
+      <button class="nav-tab" id="anav-chat" onclick="showSection('chat', event)">💬 Чат</button>
+      <button class="nav-tab" id="anav-myprofile" onclick="showSection('myprofile', event)">Мой профиль</button>
     </div>
-    <div class="nav-right desktop-right">
+    <div class="nav-right">
       <span id="liveIndicator" class="live-dot" title="Реальное время"></span>
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
+      <button class="burger" onclick="toggleAdminMenu()">☰</button>
     </div>
   </nav>
+
+  <!-- Mobile dropdown -->
+  <div id="adminMobileDropdown" class="mobile-dropdown admin-dropdown">
+    <button onclick="showSection('dashboard', null); closeMobileMenu()">📊 Обзор</button>
+    <button onclick="showSection('users', null); closeMobileMenu()">👥 Пользователи</button>
+    <button onclick="showSection('videos', null); closeMobileMenu()">📹 Видео</button>
+    <button onclick="showSection('chat', null); closeMobileMenu()">💬 Чат</button>
+    <button onclick="showSection('myprofile', null); closeMobileMenu()">👤 Мой профиль</button>
+    <button onclick="logout()" class="mobile-menu-logout">🚪 Выйти</button>
+  </div>
+  <div id="adminMobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
 
   <main class="main-content">
 
@@ -54,6 +65,13 @@
           <div class="stat-info">
             <span id="statToday" class="stat-num">—</span>
             <span class="stat-label">Зарегистрировано сегодня</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🟢</div>
+          <div class="stat-info">
+            <span id="statOnline" class="stat-num">—</span>
+            <span class="stat-label">Сейчас онлайн</span>
           </div>
         </div>
       </div>
@@ -252,11 +270,19 @@
       document.getElementById('statToday').textContent = s.today;
     }
 
+    let onlineIds = new Set();
+
     async function loadUsers() {
-      const res = await fetch('/api/admin/users');
-      allUsers = await res.json();
+      const [usersRes, onlineRes] = await Promise.all([
+        fetch('/api/admin/users'),
+        fetch('/api/online')
+      ]);
+      allUsers = await usersRes.json();
+      const online = await onlineRes.json();
+      onlineIds = new Set(online.ids);
       applyFilters();
       renderRecentUsers(allUsers.slice(0, 5));
+      document.getElementById('statOnline').textContent = online.count;
     }
 
     function applyFilters() {
@@ -298,7 +324,10 @@
             ${users.map(u => `
               <tr onclick="showUser(${u.id})" class="table-row${prevUserIds.size && !prevUserIds.has(u.id) ? ' row-new' : ''}">
                 <td><div class="cell-user">
-                  <div class="avatar-circle xsmall" style="${u.avatar_data ? `background-image:url(${u.avatar_data});background-size:cover;background-position:center` : `background:${u.avatar_color}`}">${u.avatar_data ? '' : u.username[0].toUpperCase()}</div>
+                  <div class="avatar-wrap-sm">
+                    <div class="avatar-circle xsmall" style="${u.avatar_data ? `background-image:url(${u.avatar_data});background-size:cover;background-position:center` : `background:${u.avatar_color}`}">${u.avatar_data ? '' : u.username[0].toUpperCase()}</div>
+                    ${onlineIds.has(u.id) ? '<span class="online-dot"></span>' : ''}
+                  </div>
                   ${u.username}
                 </div></td>
                 <td>${u.email}</td>
@@ -433,20 +462,12 @@
     }
 
     function toggleAdminMenu() {
-      const tabs = document.getElementById('adminNavTabs');
-      tabs.classList.toggle('mobile-open');
-      let overlay = document.getElementById('menuOverlay');
-      if (tabs.classList.contains('mobile-open')) {
-        if (!overlay) {
-          overlay = document.createElement('div');
-          overlay.id = 'menuOverlay';
-          overlay.style.cssText = 'position:fixed;inset:56px 0 0 0;z-index:9998;';
-          overlay.onclick = () => { tabs.classList.remove('mobile-open'); overlay.remove(); };
-          document.body.appendChild(overlay);
-        }
-      } else {
-        overlay?.remove();
-      }
+      document.getElementById('adminMobileDropdown').classList.toggle('open');
+      document.getElementById('adminMobileOverlay').classList.toggle('open');
+    }
+    function closeMobileMenu() {
+      document.getElementById('adminMobileDropdown').classList.remove('open');
+      document.getElementById('adminMobileOverlay').classList.remove('open');
     }
 
     function showSection(name, e) {
