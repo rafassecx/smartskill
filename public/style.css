@@ -119,19 +119,35 @@ textarea { resize: vertical; }
 .navbar {
   background: #1a1a2e;
   border-bottom: 1px solid #2d2d50;
-  padding: 0 28px;
+  padding: 0 24px;
   height: 60px;
   display: flex;
   align-items: center;
-  gap: 0;
   position: sticky;
   top: 0;
   z-index: 100;
 }
-
-.nav-brand { flex-shrink: 0; }
+.nav-brand { flex-shrink: 0; margin-right: 20px; }
 .navbar .nav-tabs { flex: 1; display: flex; justify-content: center; gap: 4px; }
-.navbar .nav-right { flex-shrink: 0; }
+.navbar .nav-right { flex-shrink: 0; margin-left: 20px; display: flex; align-items: center; gap: 10px; }
+
+/* Nav user info (avatar + name, clickable) */
+.nav-user-info {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; padding: 4px 8px; border-radius: 8px;
+  transition: background 0.2s;
+}
+.nav-user-info:hover { background: rgba(255,255,255,0.06); }
+.nav-user-info .nav-username { font-size: 13px; color: #e2e8f0; white-space: nowrap; }
+
+/* Logout button on profile page */
+.btn-logout-profile {
+  background: rgba(239,68,68,0.1); color: #f87171;
+  border: 1px solid rgba(239,68,68,0.25); border-radius: 8px;
+  padding: 9px 18px; cursor: pointer; font-size: 14px; font-weight: 500;
+  transition: all 0.2s;
+}
+.btn-logout-profile:hover { background: rgba(239,68,68,0.2); }
 
 .admin-navbar { background: #16121e; border-bottom-color: #3d1f5e; }
 
@@ -514,39 +530,41 @@ textarea { resize: vertical; }
 /* ===== BURGER ===== */
 .burger {
   display: none;
-  background: none; border: 1px solid #2d2d50; color: #e2e8f0;
-  border-radius: 8px; padding: 6px 13px; font-size: 20px; cursor: pointer;
-  flex-shrink: 0; line-height: 1;
+  background: none; border: 1px solid #374151; color: #e2e8f0;
+  border-radius: 8px; padding: 7px 12px; font-size: 18px; cursor: pointer;
+  flex-shrink: 0; line-height: 1; transition: background 0.2s;
 }
+.burger:hover { background: rgba(255,255,255,0.06); }
 
-/* ===== MOBILE DROPDOWN (always fixed, shown only on mobile) ===== */
+/* ===== MOBILE DROPDOWN ===== */
 .mobile-dropdown {
   display: none;
   position: fixed;
-  top: 56px; left: 0; right: 0;
+  top: 60px; left: 0; right: 0;
   z-index: 99999;
   background: #1e1e38;
+  border-top: 1px solid #2d2d50;
   border-bottom: 2px solid #6c63ff;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.8);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.7);
   flex-direction: column;
+  overflow: hidden;
 }
 .mobile-dropdown.open { display: flex; }
-.admin-dropdown { background: #1a1228; border-bottom-color: #f59e0b; }
+.admin-dropdown { border-bottom-color: #f59e0b; }
 .mobile-dropdown button {
   background: none; border: none; color: #e2e8f0;
-  padding: 16px 24px; text-align: left; font-size: 16px; cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 16px 22px; text-align: left; font-size: 15px;
+  font-weight: 500; cursor: pointer; width: 100%;
   transition: background 0.15s;
 }
-.mobile-dropdown button:hover { background: rgba(108,99,255,0.15); }
+.mobile-dropdown button:active { background: rgba(255,255,255,0.08); }
 .mobile-menu-logout { color: #f87171 !important; }
+.mobile-divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0; }
 
 .mobile-overlay {
-  display: none;
-  position: fixed;
-  inset: 56px 0 0 0;
-  z-index: 99998;
-  background: rgba(0,0,0,0.4);
+  display: none; position: fixed;
+  top: 60px; left: 0; right: 0; bottom: 0;
+  z-index: 99998; background: rgba(0,0,0,0.5);
 }
 .mobile-overlay.open { display: block; }
 
@@ -581,16 +599,8 @@ textarea { resize: vertical; }
   background: #4ade80; flex-shrink: 0;
 }
 
-/* ===== NAV AVATAR + ONLINE DOT ===== */
-.nav-user-avatar {
-  position: relative; display: flex; align-items: center; flex-shrink: 0;
-}
-.nav-online-dot {
-  position: absolute; bottom: 0; right: 0;
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #4ade80; border: 2px solid #1a1a2e;
-  animation: pulse-dot 2s infinite;
-}
+/* ===== NAV AVATAR ===== */
+.nav-user-avatar { position: relative; display: flex; align-items: center; flex-shrink: 0; }
 
 /* ===== UNREAD BADGE ===== */
 .unread-badge {
@@ -620,10 +630,12 @@ textarea { resize: vertical; }
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
   /* Navbar */
-  .navbar { padding: 0 16px; height: 56px; }
-  .burger { display: flex; align-items: center; }
+  .navbar { padding: 0 16px; height: 60px; }
+  .navbar .nav-brand { margin-right: 0; flex: 1; }
   .navbar .nav-tabs { display: none; }
-  .nav-right { gap: 8px; }
+  .navbar .nav-right { margin-left: 0; gap: 6px; }
+  .burger { display: flex; align-items: center; }
+  .nav-user-info .nav-username { display: none; }
   .hide-mobile { display: none !important; }
 
   /* Main */

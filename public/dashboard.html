@@ -13,31 +13,27 @@
       <div class="logo-icon small">S</div>
       <span>Smart Skill</span>
     </div>
-    <!-- Desktop nav -->
     <div class="nav-tabs">
       <button class="nav-tab" id="tab-btn-videos" onclick="showTab('videos', event)">Видео</button>
       <button class="nav-tab" id="tab-btn-chat" onclick="showTab('chat', event)">
-        💬 Чат
-        <span id="unreadBadge" class="unread-badge hidden"></span>
+        💬 Чат <span id="unreadBadge" class="unread-badge hidden"></span>
       </button>
       <button class="nav-tab" id="tab-btn-profile" onclick="showTab('profile', event)">Профиль</button>
     </div>
     <div class="nav-right">
-      <div class="nav-user-avatar" id="navAvatarWrap">
+      <div class="nav-user-info" onclick="showTab('profile', null)">
         <div id="navAvatar" class="avatar-circle xsmall"></div>
-        <span class="nav-online-dot"></span>
+        <span id="navUsername" class="nav-username"></span>
       </div>
-      <span id="navUsername" class="nav-username hide-mobile"></span>
-      <button onclick="logout()" class="btn-logout hide-mobile">Выйти</button>
       <button class="burger" onclick="toggleMobileMenu()">☰</button>
     </div>
   </nav>
 
-  <!-- Mobile dropdown (separate from desktop nav) -->
   <div id="mobileDropdown" class="mobile-dropdown">
     <button onclick="showTab('videos', null); closeMobileMenu()">📹 Видео</button>
     <button onclick="showTab('chat', null); closeMobileMenu()">💬 Чат <span id="unreadBadgeMobile" class="unread-badge hidden"></span></button>
     <button onclick="showTab('profile', null); closeMobileMenu()">👤 Профиль</button>
+    <hr class="mobile-divider">
     <button onclick="logout()" class="mobile-menu-logout">🚪 Выйти</button>
   </div>
   <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
@@ -82,7 +78,10 @@
             <span class="role-badge role-user">Пользователь</span>
             <p id="profileEmail" class="profile-email"></p>
           </div>
-          <button onclick="toggleEdit()" class="btn-secondary" id="editBtn">Редактировать</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button onclick="toggleEdit()" class="btn-secondary" id="editBtn">Редактировать</button>
+            <button onclick="logout()" class="btn-logout-profile">Выйти</button>
+          </div>
         </div>
 
         <div id="viewMode" class="profile-body">
