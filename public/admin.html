@@ -433,7 +433,20 @@
     }
 
     function toggleAdminMenu() {
-      document.getElementById('adminNavTabs').classList.toggle('mobile-open');
+      const tabs = document.getElementById('adminNavTabs');
+      tabs.classList.toggle('mobile-open');
+      let overlay = document.getElementById('menuOverlay');
+      if (tabs.classList.contains('mobile-open')) {
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'menuOverlay';
+          overlay.style.cssText = 'position:fixed;inset:56px 0 0 0;z-index:9998;';
+          overlay.onclick = () => { tabs.classList.remove('mobile-open'); overlay.remove(); };
+          document.body.appendChild(overlay);
+        }
+      } else {
+        overlay?.remove();
+      }
     }
 
     function showSection(name, e) {

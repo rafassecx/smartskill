@@ -116,10 +116,25 @@
     }
 
     function toggleMobileMenu() {
-      document.getElementById('navTabs').classList.toggle('mobile-open');
+      const tabs = document.getElementById('navTabs');
+      tabs.classList.toggle('mobile-open');
+      // overlay to close on outside click
+      let overlay = document.getElementById('menuOverlay');
+      if (tabs.classList.contains('mobile-open')) {
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'menuOverlay';
+          overlay.style.cssText = 'position:fixed;inset:56px 0 0 0;z-index:9998;';
+          overlay.onclick = closeMobileMenu;
+          document.body.appendChild(overlay);
+        }
+      } else {
+        overlay?.remove();
+      }
     }
     function closeMobileMenu() {
       document.getElementById('navTabs').classList.remove('mobile-open');
+      document.getElementById('menuOverlay')?.remove();
     }
 
     async function loadProfile() {
