@@ -23,6 +23,10 @@
     </div>
     <div class="nav-right">
       <span id="liveIndicator" class="live-dot" title="Реальное время"></span>
+      <div class="nav-user-avatar">
+        <div id="adminNavAvatar" class="avatar-circle xsmall"></div>
+        <span class="nav-online-dot"></span>
+      </div>
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
       <button class="burger" onclick="toggleAdminMenu()">☰</button>
@@ -216,6 +220,7 @@
     function fillAdminProfile() {
       const avatar = document.getElementById('adminAvatarCircle');
       setAvatar(avatar, adminData);
+      setAvatar(document.getElementById('adminNavAvatar'), adminData);
       document.getElementById('adminUsername').textContent = adminData.username;
       document.getElementById('adminEmail').textContent = adminData.email;
       document.getElementById('adminViewFullName').textContent = adminData.full_name || '—';

@@ -550,13 +550,49 @@ textarea { resize: vertical; }
 }
 .mobile-overlay.open { display: block; }
 
-/* ===== ONLINE DOT ===== */
+/* ===== ONLINE DOT (table) ===== */
 .avatar-wrap-sm { position: relative; display: inline-block; flex-shrink: 0; }
 .online-dot {
   position: absolute; bottom: 0; right: 0;
   width: 9px; height: 9px; border-radius: 50%;
   background: #4ade80; border: 2px solid #0f0f1a;
 }
+
+/* ===== NAV AVATAR + ONLINE DOT ===== */
+.nav-user-avatar {
+  position: relative; display: flex; align-items: center; flex-shrink: 0;
+}
+.nav-online-dot {
+  position: absolute; bottom: 0; right: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #4ade80; border: 2px solid #1a1a2e;
+  animation: pulse-dot 2s infinite;
+}
+
+/* ===== UNREAD BADGE ===== */
+.unread-badge {
+  background: #ef4444; color: #fff;
+  font-size: 10px; font-weight: 700;
+  border-radius: 10px; padding: 1px 5px;
+  margin-left: 4px; vertical-align: middle;
+  min-width: 16px; display: inline-block; text-align: center;
+}
+.unread-badge.hidden { display: none; }
+
+/* ===== CHAT TOAST (new message notification) ===== */
+.chat-toast {
+  position: fixed; bottom: 90px; right: 20px;
+  background: #1e1e38; border: 1px solid #6c63ff;
+  border-radius: 14px; padding: 14px 18px;
+  max-width: 300px; cursor: pointer; z-index: 9999;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  transform: translateY(20px); opacity: 0;
+  transition: all 0.3s ease; pointer-events: none;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.chat-toast.show { transform: translateY(0); opacity: 1; pointer-events: all; }
+.ct-name { font-size: 13px; font-weight: 700; color: #a78bfa; }
+.ct-text { font-size: 13px; color: #e2e8f0; line-height: 1.4; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {

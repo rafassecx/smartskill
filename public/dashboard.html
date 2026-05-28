@@ -16,10 +16,17 @@
     <!-- Desktop nav -->
     <div class="nav-tabs">
       <button class="nav-tab" id="tab-btn-videos" onclick="showTab('videos', event)">Видео</button>
-      <button class="nav-tab" id="tab-btn-chat" onclick="showTab('chat', event)">💬 Чат <span id="onlineBadge" class="online-badge"></span></button>
+      <button class="nav-tab" id="tab-btn-chat" onclick="showTab('chat', event)">
+        💬 Чат
+        <span id="unreadBadge" class="unread-badge hidden"></span>
+      </button>
       <button class="nav-tab" id="tab-btn-profile" onclick="showTab('profile', event)">Профиль</button>
     </div>
     <div class="nav-right">
+      <div class="nav-user-avatar" id="navAvatarWrap">
+        <div id="navAvatar" class="avatar-circle xsmall"></div>
+        <span class="nav-online-dot"></span>
+      </div>
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
       <button class="burger" onclick="toggleMobileMenu()">☰</button>
@@ -29,7 +36,7 @@
   <!-- Mobile dropdown (separate from desktop nav) -->
   <div id="mobileDropdown" class="mobile-dropdown">
     <button onclick="showTab('videos', null); closeMobileMenu()">📹 Видео</button>
-    <button onclick="showTab('chat', null); closeMobileMenu()">💬 Чат</button>
+    <button onclick="showTab('chat', null); closeMobileMenu()">💬 Чат <span id="unreadBadgeMobile" class="unread-badge hidden"></span></button>
     <button onclick="showTab('profile', null); closeMobileMenu()">👤 Профиль</button>
     <button onclick="logout()" class="mobile-menu-logout">🚪 Выйти</button>
   </div>
@@ -121,6 +128,7 @@
       currentTab = name;
       closeMobileMenu();
       if (name === 'videos') loadVideos();
+      if (name === 'chat') { setUnread(0); scrollChat(); }
       window.location.hash = name;
     }
 
@@ -149,19 +157,23 @@
       renderProfile();
     }
 
-    function renderProfile() {
-      const avatar = document.getElementById('avatarCircle');
-      if (userData.avatar_data) {
-        avatar.style.backgroundImage = `url(${userData.avatar_data})`;
-        avatar.style.backgroundSize = 'cover';
-        avatar.style.backgroundPosition = 'center';
-        avatar.textContent = '';
-        avatar.style.background = '';
+    function setAvatarEl(el, user) {
+      if (user.avatar_data) {
+        el.style.backgroundImage = `url(${user.avatar_data})`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        el.style.background = '';
+        el.textContent = '';
       } else {
-        avatar.style.backgroundImage = '';
-        avatar.textContent = userData.username[0].toUpperCase();
-        avatar.style.background = userData.avatar_color;
+        el.style.backgroundImage = '';
+        el.style.background = user.avatar_color;
+        el.textContent = user.username[0].toUpperCase();
       }
+    }
+
+    function renderProfile() {
+      setAvatarEl(document.getElementById('avatarCircle'), userData);
+      setAvatarEl(document.getElementById('navAvatar'), userData);
       document.getElementById('profileUsername').textContent = userData.username;
       document.getElementById('profileEmail').textContent = userData.email;
       document.getElementById('viewFullName').textContent = userData.full_name || '—';
@@ -247,6 +259,21 @@
 
     // ===== CHAT =====
     let ws = null;
+    let unreadCount = 0;
+
+    function setUnread(n) {
+      unreadCount = n;
+      const b1 = document.getElementById('unreadBadge');
+      const b2 = document.getElementById('unreadBadgeMobile');
+      if (n > 0) {
+        const label = n > 99 ? '99+' : n;
+        b1.textContent = label; b1.classList.remove('hidden');
+        b2.textContent = label; b2.classList.remove('hidden');
+      } else {
+        b1.classList.add('hidden');
+        b2.classList.add('hidden');
+      }
+    }
 
     function connectChat() {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -255,11 +282,36 @@
       ws.onmessage = ({ data }) => {
         const msg = JSON.parse(data);
         if (msg.type === 'history') { renderHistory(msg.messages); return; }
-        if (msg.type === 'message') { appendMessage(msg); scrollChat(); return; }
+        if (msg.type === 'message') {
+          appendMessage(msg);
+          scrollChat();
+          // Notify if not on chat tab and message is from someone else
+          if (currentTab !== 'chat' && msg.user_id !== userData?.id) {
+            setUnread(unreadCount + 1);
+            showChatToast(msg.username, msg.text);
+          }
+          return;
+        }
         if (msg.type === 'online') { updateOnline(msg.count); return; }
         if (msg.type === 'deleted') { document.getElementById('msg-' + msg.id)?.remove(); return; }
       };
       ws.onclose = () => setTimeout(connectChat, 3000);
+    }
+
+    let chatToastTimer;
+    function showChatToast(username, text) {
+      let t = document.getElementById('chatToast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'chatToast';
+        t.className = 'chat-toast';
+        t.onclick = () => { showTab('chat', null); t.classList.remove('show'); };
+        document.body.appendChild(t);
+      }
+      t.innerHTML = `<span class="ct-name">💬 ${username}</span><span class="ct-text">${escapeHtml(text.length > 50 ? text.slice(0,50)+'…' : text)}</span>`;
+      t.classList.add('show');
+      clearTimeout(chatToastTimer);
+      chatToastTimer = setTimeout(() => t.classList.remove('show'), 4000);
     }
 
     function renderHistory(messages) {
