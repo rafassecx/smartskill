@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Мой профиль — UserHub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="app-page">
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon small">U</div>
+      <span>UserHub</span>
+    </div>
+    <div class="nav-right">
+      <span id="navUsername" class="nav-username"></span>
+      <button onclick="logout()" class="btn-logout">Выйти</button>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="profile-card">
+      <div class="profile-header">
+        <div id="avatarCircle" class="avatar-circle large"></div>
+        <div class="profile-header-info">
+          <h1 id="profileUsername"></h1>
+          <span id="profileRole" class="role-badge"></span>
+          <p id="profileEmail" class="profile-email"></p>
+        </div>
+        <button onclick="toggleEdit()" class="btn-secondary" id="editBtn">Редактировать</button>
+      </div>
+
+      <!-- View mode -->
+      <div id="viewMode" class="profile-body">
+        <div class="info-grid">
+          <div class="info-item">
+            <label>Полное имя</label>
+            <p id="viewFullName">—</p>
+          </div>
+          <div class="info-item">
+            <label>Телефон</label>
+            <p id="viewPhone">—</p>
+          </div>
+          <div class="info-item">
+            <label>Email</label>
+            <p id="viewEmail">—</p>
+          </div>
+          <div class="info-item">
+            <label>Дата регистрации</label>
+            <p id="viewCreated">—</p>
+          </div>
+          <div class="info-item">
+            <label>Последний вход</label>
+            <p id="viewLastLogin">—</p>
+          </div>
+        </div>
+        <div class="info-item full-width">
+          <label>О себе</label>
+          <p id="viewBio">—</p>
+        </div>
+      </div>
+
+      <!-- Edit mode -->
+      <form id="editMode" class="profile-body hidden" onsubmit="saveProfile(event)">
+        <div class="info-grid">
+          <div class="form-group">
+            <label>Полное имя</label>
+            <input type="text" id="editFullName" placeholder="Иван Иванов">
+          </div>
+          <div class="form-group">
+            <label>Телефон</label>
+            <input type="tel" id="editPhone" placeholder="+7 999 000 00 00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>О себе</label>
+          <textarea id="editBio" rows="4" placeholder="Расскажите о себе..."></textarea>
+        </div>
+        <div id="editError" class="error-msg"></div>
+        <div id="editSuccess" class="success-msg"></div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Сохранить</button>
+          <button type="button" onclick="toggleEdit()" class="btn-ghost">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    let userData = null;
+    let editing = false;
+
+    async function loadProfile() {
+      const res = await fetch('/api/profile');
+      if (!res.ok) { window.location.href = '/index.html'; return; }
+      userData = await res.json();
+
+      if (userData.role === 'admin') { window.location.href = '/admin.html'; return; }
+
+      document.getElementById('navUsername').textContent = userData.username;
+      const avatar = document.getElementById('avatarCircle');
+      avatar.textContent = userData.username[0].toUpperCase();
+      avatar.style.background = userData.avatar_color;
+
+      document.getElementById('profileUsername').textContent = userData.username;
+      document.getElementById('profileRole').textContent = 'Пользователь';
+      document.getElementById('profileRole').className = 'role-badge role-user';
+      document.getElementById('profileEmail').textContent = userData.email;
+
+      document.getElementById('viewFullName').textContent = userData.full_name || '—';
+      document.getElementById('viewPhone').textContent = userData.phone || '—';
+      document.getElementById('viewEmail').textContent = userData.email;
+      document.getElementById('viewCreated').textContent = formatDate(userData.created_at);
+      document.getElementById('viewLastLogin').textContent = userData.last_login ? formatDate(userData.last_login) : 'Первый вход';
+      document.getElementById('viewBio').textContent = userData.bio || '—';
+    }
+
+    function formatDate(dateStr) {
+      return new Date(dateStr).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    function toggleEdit() {
+      editing = !editing;
+      document.getElementById('viewMode').classList.toggle('hidden', editing);
+      document.getElementById('editMode').classList.toggle('hidden', !editing);
+      document.getElementById('editBtn').textContent = editing ? 'Отмена' : 'Редактировать';
+      if (editing) {
+        document.getElementById('editFullName').value = userData.full_name || '';
+        document.getElementById('editPhone').value = userData.phone || '';
+        document.getElementById('editBio').value = userData.bio || '';
+      }
+    }
+
+    async function saveProfile(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('editError');
+      const sucEl = document.getElementById('editSuccess');
+      errEl.textContent = ''; sucEl.textContent = '';
+
+      const res = await fetch('/api/profile', {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          full_name: editFullName.value,
+          phone: editPhone.value,
+          bio: editBio.value
+        })
+      });
+      if (res.ok) {
+        sucEl.textContent = 'Профиль обновлён!';
+        setTimeout(() => { sucEl.textContent = ''; loadProfile(); toggleEdit(); }, 1000);
+      } else {
+        const d = await res.json();
+        errEl.textContent = d.error;
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/index.html';
+    }
+
+    loadProfile();
+  </script>
+</body>
+</html>
