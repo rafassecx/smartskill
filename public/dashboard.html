@@ -16,6 +16,7 @@
     <button class="burger" onclick="toggleMobileMenu()" id="burgerBtn">☰</button>
     <div class="nav-tabs" id="navTabs">
       <button class="nav-tab" id="tab-btn-videos" onclick="showTab('videos', event)">Видео</button>
+      <button class="nav-tab" id="tab-btn-chat" onclick="showTab('chat', event)">💬 Чат <span id="onlineBadge" class="online-badge"></span></button>
       <button class="nav-tab" id="tab-btn-profile" onclick="showTab('profile', event)">Профиль</button>
       <button onclick="logout()" class="btn-logout mobile-logout">Выйти</button>
     </div>
@@ -31,6 +32,21 @@
     <div id="tab-videos" class="hidden">
       <h2 class="section-title">Видео</h2>
       <div id="videoGrid" class="video-grid"></div>
+    </div>
+
+    <!-- Chat tab -->
+    <div id="tab-chat" class="hidden">
+      <div class="chat-wrap">
+        <div class="chat-header">
+          <span>Общий чат</span>
+          <span id="onlineCount" class="online-count"></span>
+        </div>
+        <div id="chatMessages" class="chat-messages"></div>
+        <form class="chat-form" onsubmit="sendMessage(event)">
+          <input type="text" id="chatInput" placeholder="Написать сообщение..." maxlength="1000" autocomplete="off">
+          <button type="submit" class="chat-send">➤</button>
+        </form>
+      </div>
     </div>
 
     <!-- Profile tab -->
@@ -218,15 +234,84 @@
       window.location.href = '/index.html';
     }
 
+    // ===== CHAT =====
+    let ws = null;
+
+    function connectChat() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}`);
+
+      ws.onmessage = ({ data }) => {
+        const msg = JSON.parse(data);
+        if (msg.type === 'history') { renderHistory(msg.messages); return; }
+        if (msg.type === 'message') { appendMessage(msg); scrollChat(); return; }
+        if (msg.type === 'online') { updateOnline(msg.count); return; }
+        if (msg.type === 'deleted') { document.getElementById('msg-' + msg.id)?.remove(); return; }
+      };
+      ws.onclose = () => setTimeout(connectChat, 3000);
+    }
+
+    function renderHistory(messages) {
+      const el = document.getElementById('chatMessages');
+      el.innerHTML = '';
+      messages.forEach(m => appendMessage(m, false));
+      scrollChat();
+    }
+
+    function appendMessage(m, scroll = true) {
+      const el = document.getElementById('chatMessages');
+      const isMine = m.user_id === userData?.id;
+      const time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const avatarStyle = m.avatar_data
+        ? `background-image:url(${m.avatar_data});background-size:cover;background-position:center`
+        : `background:${m.avatar_color}`;
+      const avatarLetter = m.avatar_data ? '' : m.username[0].toUpperCase();
+      const isAdmin = m.role === 'admin';
+
+      const div = document.createElement('div');
+      div.id = 'msg-' + m.id;
+      div.className = `chat-msg ${isMine ? 'mine' : ''}`;
+      div.innerHTML = `
+        ${!isMine ? `<div class="chat-avatar" style="${avatarStyle}">${avatarLetter}</div>` : ''}
+        <div class="chat-bubble-wrap">
+          ${!isMine ? `<span class="chat-name ${isAdmin ? 'chat-admin' : ''}">${m.username}${isAdmin ? ' 🛡️' : ''}</span>` : ''}
+          <div class="chat-bubble">${escapeHtml(m.text)}<span class="chat-time">${time}</span></div>
+        </div>
+        ${isMine ? `<div class="chat-avatar" style="${avatarStyle}">${avatarLetter}</div>` : ''}
+      `;
+      el.appendChild(div);
+    }
+
+    function scrollChat() {
+      const el = document.getElementById('chatMessages');
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function updateOnline(count) {
+      document.getElementById('onlineCount').textContent = `🟢 ${count} онлайн`;
+      document.getElementById('onlineBadge').textContent = count;
+    }
+
+    function sendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text || !ws || ws.readyState !== 1) return;
+      ws.send(JSON.stringify({ text }));
+      input.value = '';
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     async function init() {
       await loadProfile();
-      // Start on videos tab (or hash)
       const hash = window.location.hash.replace('#', '') || 'videos';
-      showTab(['videos', 'profile'].includes(hash) ? hash : 'videos', null);
-      // Auto-refresh profile every 30s
+      showTab(['videos', 'profile', 'chat'].includes(hash) ? hash : 'videos', null);
       refreshInterval = setInterval(loadProfile, 30000);
-      // Auto-refresh videos every 60s when on videos tab
       setInterval(() => { if (currentTab === 'videos') loadVideos(); }, 60000);
+      connectChat();
     }
 
     init();

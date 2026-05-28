@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const { WebSocketServer } = require('ws');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -8,7 +10,9 @@ const fetch = require('node-fetch');
 const path = require('path');
 
 const app = express();
-app.set('trust proxy', 1); // Railway / Heroku reverse proxy
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+app.set('trust proxy', 1);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -79,6 +83,18 @@ async function initDB() {
   for (const sql of migrations) {
     await pool.query(sql).catch(() => {});
   }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      username TEXT NOT NULL,
+      text TEXT NOT NULL,
+      avatar_color TEXT DEFAULT '#6c63ff',
+      avatar_data TEXT,
+      role TEXT DEFAULT 'user',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS videos (
       id SERIAL PRIMARY KEY,
@@ -281,5 +297,63 @@ app.get('/api/admin/stream', auth, adminOnly, (req, res) => {
   req.on('close', () => { clearInterval(heartbeat); sseClients.delete(client); });
 });
 
+// Chat REST: get history
+app.get('/api/chat/messages', auth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM messages ORDER BY created_at ASC LIMIT 100');
+  res.json(rows);
+});
+
+// Admin: delete message
+app.delete('/api/chat/messages/:id', auth, adminOnly, async (req, res) => {
+  await pool.query('DELETE FROM messages WHERE id = $1', [req.params.id]);
+  broadcast({ type: 'deleted', id: +req.params.id });
+  res.json({ success: true });
+});
+
+// WebSocket chat
+function parseCookies(str = '') {
+  return Object.fromEntries(str.split(';').map(c => c.trim().split('=').map(decodeURIComponent)));
+}
+
+function broadcast(data) {
+  const msg = JSON.stringify(data);
+  wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
+}
+
+wss.on('connection', async (ws, req) => {
+  const cookies = parseCookies(req.headers.cookie);
+  try {
+    const user = jwt.verify(cookies.token, JWT_SECRET);
+    const { rows } = await pool.query('SELECT avatar_color, avatar_data FROM users WHERE id = $1', [user.id]);
+    ws.userId = user.id;
+    ws.username = user.username;
+    ws.role = user.role;
+    ws.avatarColor = rows[0]?.avatar_color || '#6c63ff';
+    ws.avatarData = rows[0]?.avatar_data || null;
+
+    // Send history
+    const { rows: history } = await pool.query('SELECT * FROM messages ORDER BY created_at ASC LIMIT 100');
+    ws.send(JSON.stringify({ type: 'history', messages: history }));
+
+    // Announce join
+    broadcast({ type: 'online', count: [...wss.clients].filter(c => c.readyState === 1).length });
+
+    ws.on('message', async raw => {
+      const { text } = JSON.parse(raw);
+      if (!text?.trim() || text.length > 1000) return;
+      const { rows: saved } = await pool.query(
+        'INSERT INTO messages (user_id, username, text, avatar_color, avatar_data, role) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+        [ws.userId, ws.username, text.trim(), ws.avatarColor, ws.avatarData, ws.role]
+      );
+      broadcast({ type: 'message', ...saved[0] });
+    });
+
+    ws.on('close', () => {
+      broadcast({ type: 'online', count: [...wss.clients].filter(c => c.readyState === 1).length });
+    });
+
+  } catch { ws.close(); }
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Сервер запущен: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Сервер запущен: http://localhost:${PORT}`));

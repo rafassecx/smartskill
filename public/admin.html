@@ -18,6 +18,7 @@
       <button class="nav-tab active" onclick="showSection('dashboard', event)">Обзор</button>
       <button class="nav-tab" onclick="showSection('users', event)">Пользователи</button>
       <button class="nav-tab" onclick="showSection('videos', event)">Видео</button>
+      <button class="nav-tab" onclick="showSection('chat', event)">💬 Чат</button>
       <button class="nav-tab" onclick="showSection('myprofile', event)">Мой профиль</button>
       <button onclick="logout()" class="btn-logout mobile-logout">Выйти</button>
     </div>
@@ -94,6 +95,21 @@
         <div id="videoError" class="error-msg"></div>
       </div>
       <div id="adminVideoList" class="admin-video-list"></div>
+    </section>
+
+    <!-- Chat -->
+    <section id="section-chat" class="section">
+      <div class="chat-wrap">
+        <div class="chat-header">
+          <span>Общий чат</span>
+          <span id="adminOnlineCount" class="online-count"></span>
+        </div>
+        <div id="adminChatMessages" class="chat-messages"></div>
+        <form class="chat-form" onsubmit="adminSendMessage(event)">
+          <input type="text" id="adminChatInput" placeholder="Написать сообщение..." maxlength="1000" autocomplete="off">
+          <button type="submit" class="chat-send">➤</button>
+        </form>
+      </div>
     </section>
 
     <!-- My Profile -->
@@ -469,12 +485,86 @@
       return new Date(d).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     }
 
+    // ===== ADMIN CHAT =====
+    let adminWs = null;
+
+    function connectAdminChat() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      adminWs = new WebSocket(`${proto}://${location.host}`);
+      adminWs.onmessage = ({ data }) => {
+        const msg = JSON.parse(data);
+        if (msg.type === 'history') { renderAdminHistory(msg.messages); return; }
+        if (msg.type === 'message') { appendAdminMessage(msg); adminScrollChat(); return; }
+        if (msg.type === 'online') { document.getElementById('adminOnlineCount').textContent = `🟢 ${msg.count} онлайн`; return; }
+        if (msg.type === 'deleted') { document.getElementById('amsg-' + msg.id)?.remove(); return; }
+      };
+      adminWs.onclose = () => setTimeout(connectAdminChat, 3000);
+    }
+
+    function renderAdminHistory(messages) {
+      const el = document.getElementById('adminChatMessages');
+      el.innerHTML = '';
+      messages.forEach(m => appendAdminMessage(m, false));
+      adminScrollChat();
+    }
+
+    function appendAdminMessage(m) {
+      const el = document.getElementById('adminChatMessages');
+      const isMine = m.user_id === adminData?.id;
+      const time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const avatarStyle = m.avatar_data
+        ? `background-image:url(${m.avatar_data});background-size:cover;background-position:center`
+        : `background:${m.avatar_color}`;
+      const avatarLetter = m.avatar_data ? '' : m.username[0].toUpperCase();
+      const isAdmin = m.role === 'admin';
+
+      const div = document.createElement('div');
+      div.id = 'amsg-' + m.id;
+      div.className = `chat-msg ${isMine ? 'mine' : ''}`;
+      div.innerHTML = `
+        ${!isMine ? `<div class="chat-avatar" style="${avatarStyle}">${avatarLetter}</div>` : ''}
+        <div class="chat-bubble-wrap">
+          ${!isMine ? `<span class="chat-name ${isAdmin ? 'chat-admin' : ''}">${m.username}${isAdmin ? ' 🛡️' : ''}</span>` : ''}
+          <div class="chat-bubble">
+            ${escapeHtml(m.text)}
+            <span class="chat-time">${time}</span>
+            <button class="chat-delete-btn" onclick="deleteChatMsg(${m.id})" title="Удалить">✕</button>
+          </div>
+        </div>
+        ${isMine ? `<div class="chat-avatar" style="${avatarStyle}">${avatarLetter}</div>` : ''}
+      `;
+      el.appendChild(div);
+    }
+
+    function adminScrollChat() {
+      const el = document.getElementById('adminChatMessages');
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function adminSendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('adminChatInput');
+      const text = input.value.trim();
+      if (!text || !adminWs || adminWs.readyState !== 1) return;
+      adminWs.send(JSON.stringify({ text }));
+      input.value = '';
+    }
+
+    async function deleteChatMsg(id) {
+      await fetch(`/api/chat/messages/${id}`, { method: 'DELETE' });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     async function logout() {
       await fetch('/api/logout', { method: 'POST' });
       window.location.href = '/index.html';
     }
 
     init();
+    connectAdminChat();
   </script>
 </body>
 </html>
