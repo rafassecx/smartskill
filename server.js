@@ -13,6 +13,14 @@ const pool = new Pool({
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-2024';
 const ADMIN_EMAIL = 'raffaka16k@gmail.com';
 
+// SSE clients store
+const sseClients = new Set();
+
+function pushToAdmins(event, data) {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach(client => client.res.write(msg));
+}
+
 // Init DB
 async function initDB() {
   await pool.query(`
@@ -72,6 +80,7 @@ app.post('/api/register', async (req, res) => {
     );
     const token = jwt.sign({ id: result.rows[0].id, username, email, role }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    pushToAdmins('user_registered', { id: result.rows[0].id, username, email, role });
     res.json({ success: true, role, username });
   } catch (e) {
     if (e.code === '23505') {
@@ -143,6 +152,7 @@ app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Пользователь не найден' });
   if (rows[0].email === ADMIN_EMAIL) return res.status(403).json({ error: 'Нельзя удалить администратора' });
   await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+  pushToAdmins('user_deleted', { id: +req.params.id });
   res.json({ success: true });
 });
 
@@ -160,6 +170,24 @@ app.get('/api/admin/stats', auth, adminOnly, async (req, res) => {
   const admins = (await pool.query("SELECT COUNT(*) FROM users WHERE role='admin'")).rows[0].count;
   const today = (await pool.query("SELECT COUNT(*) FROM users WHERE created_at::date = CURRENT_DATE")).rows[0].count;
   res.json({ total: +total, admins: +admins, today: +today });
+});
+
+// SSE stream for admin panel
+app.get('/api/admin/stream', auth, adminOnly, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.write('event: connected\ndata: {}\n\n');
+
+  const client = { res };
+  sseClients.add(client);
+
+  const heartbeat = setInterval(() => res.write(':ping\n\n'), 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(client);
+  });
 });
 
 const PORT = process.env.PORT || 3000;

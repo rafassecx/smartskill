@@ -18,6 +18,7 @@
       <button class="nav-tab" onclick="showSection('myprofile')">Мой профиль</button>
     </div>
     <div class="nav-right">
+      <span id="liveIndicator" class="live-dot" title="Обновления в реальном времени"></span>
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
     </div>
@@ -151,6 +152,32 @@
       fillAdminProfile();
       loadStats();
       loadUsers();
+      connectSSE();
+    }
+
+    function connectSSE() {
+      const es = new EventSource('/api/admin/stream');
+
+      es.addEventListener('connected', () => {
+        document.getElementById('liveIndicator').classList.add('live-dot--on');
+      });
+
+      es.addEventListener('user_registered', (e) => {
+        loadUsers();
+        loadStats();
+        showToast('Новый пользователь зарегистрировался');
+      });
+
+      es.addEventListener('user_deleted', (e) => {
+        loadUsers();
+        loadStats();
+      });
+
+      es.onerror = () => {
+        document.getElementById('liveIndicator').classList.remove('live-dot--on');
+        setTimeout(connectSSE, 3000);
+        es.close();
+      };
     }
 
     function fillAdminProfile() {
@@ -195,59 +222,6 @@
           <span class="user-date">${formatDate(u.created_at)}</span>
         </div>
       `).join('');
-    }
-
-    function renderUsersTable(users) {
-      const el = document.getElementById('usersList');
-      if (!users.length) { el.innerHTML = '<p class="empty-msg">Пользователи не найдены</p>'; return; }
-      el.innerHTML = `
-        <table class="users-table">
-          <thead>
-            <tr>
-              <th>Пользователь</th>
-              <th>Email</th>
-              <th>Пароль</th>
-              <th>Полное имя</th>
-              <th>Телефон</th>
-              <th>Роль</th>
-              <th>Дата регистрации</th>
-              <th>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${users.map(u => `
-              <tr onclick="showUser(${u.id})" class="table-row">
-                <td>
-                  <div class="cell-user">
-                    <div class="avatar-circle xsmall" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
-                    ${u.username}
-                  </div>
-                </td>
-                <td>${u.email}</td>
-                <td><span class="password-cell">${u.plain_password || '—'}</span></td>
-                <td>${u.full_name || '—'}</td>
-                <td>${u.phone || '—'}</td>
-                <td><span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? 'Админ' : 'Польз.'}</span></td>
-                <td>${formatDate(u.created_at)}</td>
-                <td onclick="event.stopPropagation()">
-                  ${u.email !== '${adminData?.email}' ? `<button onclick="deleteUser(${u.id}, '${u.username}')" class="btn-danger-sm">Удалить</button>` : '<span class="self-label">Это вы</span>'}
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-      // Fix "это вы" check after render
-      document.querySelectorAll('.table-row').forEach((row, i) => {
-        const u = users[i];
-        const actionCell = row.querySelector('td:last-child');
-        if (u.email === adminData?.email) {
-          actionCell.innerHTML = '<span class="self-label">Это вы</span>';
-        } else {
-          actionCell.innerHTML = `<button class="btn-danger-sm">Удалить</button>`;
-          actionCell.querySelector('button').onclick = (e) => { e.stopPropagation(); deleteUser(u.id, u.username); };
-        }
-      });
     }
 
     function filterUsers() {
@@ -326,6 +300,74 @@
         adminData = await refreshed.json();
         setTimeout(() => { document.getElementById('adminEditSuccess').textContent = ''; fillAdminProfile(); toggleAdminEdit(); }, 1000);
       }
+    }
+
+    let prevUserIds = new Set();
+
+    function renderUsersTable(users) {
+      const el = document.getElementById('usersList');
+      if (!users.length) { el.innerHTML = '<p class="empty-msg">Пользователи не найдены</p>'; prevUserIds = new Set(); return; }
+      const newIds = new Set(users.map(u => u.id));
+      el.innerHTML = `
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Пользователь</th>
+              <th>Email</th>
+              <th>Пароль</th>
+              <th>Полное имя</th>
+              <th>Телефон</th>
+              <th>Роль</th>
+              <th>Дата регистрации</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(u => `
+              <tr onclick="showUser(${u.id})" class="table-row${prevUserIds.size && !prevUserIds.has(u.id) ? ' row-new' : ''}">
+                <td>
+                  <div class="cell-user">
+                    <div class="avatar-circle xsmall" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
+                    ${u.username}
+                  </div>
+                </td>
+                <td>${u.email}</td>
+                <td><span class="password-cell">${u.plain_password || '—'}</span></td>
+                <td>${u.full_name || '—'}</td>
+                <td>${u.phone || '—'}</td>
+                <td><span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? 'Админ' : 'Польз.'}</span></td>
+                <td>${formatDate(u.created_at)}</td>
+                <td onclick="event.stopPropagation()"></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      document.querySelectorAll('.table-row').forEach((row, i) => {
+        const u = users[i];
+        const actionCell = row.querySelector('td:last-child');
+        if (u.email === adminData?.email) {
+          actionCell.innerHTML = '<span class="self-label">Это вы</span>';
+        } else {
+          actionCell.innerHTML = `<button class="btn-danger-sm">Удалить</button>`;
+          actionCell.querySelector('button').onclick = (e) => { e.stopPropagation(); deleteUser(u.id, u.username); };
+        }
+      });
+      prevUserIds = newIds;
+    }
+
+    let toastTimer;
+    function showToast(msg) {
+      let t = document.getElementById('toast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'toast';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.classList.add('toast-show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('toast-show'), 3000);
     }
 
     function formatDate(dateStr) {

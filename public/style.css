@@ -327,6 +327,39 @@ textarea { resize: vertical; }
 .modal-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .modal-actions { margin-top: 24px; padding-top: 20px; border-top: 1px solid #2d2d50; }
 
+/* ===== LIVE INDICATOR ===== */
+.live-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #374151; display: inline-block; flex-shrink: 0;
+  transition: background 0.3s;
+}
+.live-dot--on {
+  background: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 4px #4ade80; }
+  50% { box-shadow: 0 0 10px #4ade80, 0 0 20px rgba(74,222,128,0.3); }
+}
+
+/* ===== NEW ROW HIGHLIGHT ===== */
+.row-new { animation: flash-new 1.5s ease-out; }
+@keyframes flash-new {
+  0% { background: rgba(74,222,128,0.2); }
+  100% { background: transparent; }
+}
+
+/* ===== TOAST ===== */
+#toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: #1e293b; border: 1px solid #4ade80; color: #4ade80;
+  padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  transition: transform 0.3s ease; z-index: 9999; white-space: nowrap;
+}
+#toast.toast-show { transform: translateX(-50%) translateY(0); }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 640px) {
   .navbar { padding: 0 16px; }
