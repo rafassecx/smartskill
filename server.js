@@ -1,35 +1,38 @@
 const express = require('express');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 
 const app = express();
-const db = new Database('users.db');
-const JWT_SECRET = 'super-secret-jwt-key-2024';
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-2024';
 const ADMIN_EMAIL = 'raffaka16k@gmail.com';
 
 // Init DB
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    plain_password TEXT,
-    full_name TEXT,
-    phone TEXT,
-    bio TEXT,
-    avatar_color TEXT DEFAULT '#6c63ff',
-    role TEXT DEFAULT 'user',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_login DATETIME
-  )
-`);
-
-// Add plain_password column if upgrading from old DB
-try { db.exec('ALTER TABLE users ADD COLUMN plain_password TEXT'); } catch {}
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      plain_password TEXT,
+      full_name TEXT DEFAULT '',
+      phone TEXT DEFAULT '',
+      bio TEXT DEFAULT '',
+      avatar_color TEXT DEFAULT '#6c63ff',
+      role TEXT DEFAULT 'user',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      last_login TIMESTAMPTZ
+    )
+  `);
+}
+initDB().catch(console.error);
 
 app.use(express.json());
 app.use(cookieParser());
@@ -63,28 +66,32 @@ app.post('/api/register', async (req, res) => {
   const avatar_color = colors[Math.floor(Math.random() * colors.length)];
 
   try {
-    const stmt = db.prepare('INSERT INTO users (username, email, password, plain_password, full_name, phone, role, avatar_color) VALUES (?,?,?,?,?,?,?,?)');
-    const result = stmt.run(username, email, hash, password, full_name || '', phone || '', role, avatar_color);
-    const token = jwt.sign({ id: result.lastInsertRowid, username, email, role }, JWT_SECRET, { expiresIn: '7d' });
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password, plain_password, full_name, phone, role, avatar_color) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+      [username, email, hash, password, full_name || '', phone || '', role, avatar_color]
+    );
+    const token = jwt.sign({ id: result.rows[0].id, username, email, role }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.json({ success: true, role, username });
   } catch (e) {
-    if (e.message.includes('UNIQUE')) {
-      if (e.message.includes('username')) return res.status(400).json({ error: 'Это имя пользователя уже занято' });
-      if (e.message.includes('email')) return res.status(400).json({ error: 'Этот email уже зарегистрирован' });
+    if (e.code === '23505') {
+      if (e.constraint?.includes('username')) return res.status(400).json({ error: 'Это имя пользователя уже занято' });
+      if (e.constraint?.includes('email')) return res.status(400).json({ error: 'Этот email уже зарегистрирован' });
     }
+    console.error(e);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
 
 // Login
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+  const user = rows[0];
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ error: 'Неверный email или пароль' });
   }
-  db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+  await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
   const token = jwt.sign({ id: user.id, username: user.username, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
   res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
   res.json({ success: true, role: user.role, username: user.username });
@@ -97,54 +104,62 @@ app.post('/api/logout', (req, res) => {
 });
 
 // Get own profile
-app.get('/api/profile', auth, (req, res) => {
-  const user = db.prepare('SELECT id, username, email, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users WHERE id = ?').get(req.user.id);
-  res.json(user);
+app.get('/api/profile', auth, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, username, email, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users WHERE id = $1',
+    [req.user.id]
+  );
+  res.json(rows[0]);
 });
 
 // Update own profile
-app.put('/api/profile', auth, (req, res) => {
+app.put('/api/profile', auth, async (req, res) => {
   const { full_name, phone, bio } = req.body;
-  db.prepare('UPDATE users SET full_name=?, phone=?, bio=? WHERE id=?').run(full_name || '', phone || '', bio || '', req.user.id);
+  await pool.query('UPDATE users SET full_name=$1, phone=$2, bio=$3 WHERE id=$4', [full_name || '', phone || '', bio || '', req.user.id]);
   res.json({ success: true });
 });
 
 // Admin: get all users
-app.get('/api/admin/users', auth, adminOnly, (req, res) => {
-  const users = db.prepare('SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users ORDER BY created_at DESC').all();
-  res.json(users);
+app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users ORDER BY created_at DESC'
+  );
+  res.json(rows);
 });
 
 // Admin: get single user
-app.get('/api/admin/users/:id', auth, adminOnly, (req, res) => {
-  const user = db.prepare('SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-  res.json(user);
+app.get('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users WHERE id = $1',
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Пользователь не найден' });
+  res.json(rows[0]);
 });
 
 // Admin: delete user
-app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-  if (user.email === ADMIN_EMAIL) return res.status(403).json({ error: 'Нельзя удалить администратора' });
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Пользователь не найден' });
+  if (rows[0].email === ADMIN_EMAIL) return res.status(403).json({ error: 'Нельзя удалить администратора' });
+  await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
 // Admin: update user role
-app.put('/api/admin/users/:id/role', auth, adminOnly, (req, res) => {
+app.put('/api/admin/users/:id/role', auth, adminOnly, async (req, res) => {
   const { role } = req.body;
   if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'Неверная роль' });
-  db.prepare('UPDATE users SET role=? WHERE id=?').run(role, req.params.id);
+  await pool.query('UPDATE users SET role=$1 WHERE id=$2', [role, req.params.id]);
   res.json({ success: true });
 });
 
 // Admin stats
-app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-  const admins = db.prepare("SELECT COUNT(*) as count FROM users WHERE role='admin'").get().count;
-  const today = db.prepare("SELECT COUNT(*) as count FROM users WHERE date(created_at) = date('now')").get().count;
-  res.json({ total, admins, today });
+app.get('/api/admin/stats', auth, adminOnly, async (req, res) => {
+  const total = (await pool.query('SELECT COUNT(*) FROM users')).rows[0].count;
+  const admins = (await pool.query("SELECT COUNT(*) FROM users WHERE role='admin'")).rows[0].count;
+  const today = (await pool.query("SELECT COUNT(*) FROM users WHERE created_at::date = CURRENT_DATE")).rows[0].count;
+  res.json({ total: +total, admins: +admins, today: +today });
 });
 
 const PORT = process.env.PORT || 3000;
