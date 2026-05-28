@@ -27,8 +27,8 @@
         <div id="navAvatar" class="avatar-circle xsmall"></div>
         <span class="nav-online-dot"></span>
       </div>
-      <span id="navUsername" class="nav-username"></span>
-      <button onclick="logout()" class="btn-logout">Выйти</button>
+      <span id="navUsername" class="nav-username hide-mobile"></span>
+      <button onclick="logout()" class="btn-logout hide-mobile">Выйти</button>
       <button class="burger" onclick="toggleMobileMenu()">☰</button>
     </div>
   </nav>
@@ -57,6 +57,7 @@
           <span>Общий чат</span>
           <span id="onlineCount" class="online-count"></span>
         </div>
+        <div id="onlineUsersList" class="online-users-bar"></div>
         <div id="chatMessages" class="chat-messages"></div>
         <form class="chat-form" onsubmit="sendMessage(event)">
           <input type="text" id="chatInput" placeholder="Написать сообщение..." maxlength="1000" autocomplete="off">
@@ -292,7 +293,7 @@
           }
           return;
         }
-        if (msg.type === 'online') { updateOnline(msg.count); return; }
+        if (msg.type === 'online') { updateOnline(msg.count, msg.users); return; }
         if (msg.type === 'deleted') { document.getElementById('msg-' + msg.id)?.remove(); return; }
       };
       ws.onclose = () => setTimeout(connectChat, 3000);
@@ -350,9 +351,25 @@
       el.scrollTop = el.scrollHeight;
     }
 
-    function updateOnline(count) {
+    let onlineUsers = [];
+
+    function updateOnline(count, users = []) {
+      onlineUsers = users;
       document.getElementById('onlineCount').textContent = `🟢 ${count} онлайн`;
-      document.getElementById('onlineBadge').textContent = count;
+      const bar = document.getElementById('onlineUsersList');
+      if (!bar) return;
+      bar.innerHTML = users.map(u => {
+        const isSelf = u.id === userData?.id;
+        const avatarStyle = u.avatarData
+          ? `background-image:url(${u.avatarData});background-size:cover;background-position:center`
+          : `background:${u.avatarColor}`;
+        const letter = u.avatarData ? '' : u.username[0].toUpperCase();
+        return `<div class="online-user-chip" title="${u.username}${isSelf ? ' (вы)' : ''}">
+          <div class="ou-avatar" style="${avatarStyle}">${letter}</div>
+          <span>${isSelf ? 'Вы' : u.username}</span>
+          <span class="ou-dot"></span>
+        </div>`;
+      }).join('');
     }
 
     function sendMessage(e) {

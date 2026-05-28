@@ -326,6 +326,14 @@ function broadcast(data) {
   wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
 }
 
+function broadcastOnline() {
+  const users = [...wss.clients]
+    .filter(c => c.readyState === 1 && c.userId)
+    .map(c => ({ id: c.userId, username: c.username, avatarColor: c.avatarColor, avatarData: c.avatarData }));
+  const unique = [...new Map(users.map(u => [u.id, u])).values()];
+  broadcast({ type: 'online', count: unique.length, users: unique });
+}
+
 wss.on('connection', async (ws, req) => {
   const cookies = parseCookies(req.headers.cookie);
   try {
@@ -342,7 +350,7 @@ wss.on('connection', async (ws, req) => {
     ws.send(JSON.stringify({ type: 'history', messages: history }));
 
     // Announce join
-    broadcast({ type: 'online', count: [...wss.clients].filter(c => c.readyState === 1).length });
+    broadcastOnline();
 
     ws.on('message', async raw => {
       const { text } = JSON.parse(raw);
@@ -354,9 +362,7 @@ wss.on('connection', async (ws, req) => {
       broadcast({ type: 'message', ...saved[0] });
     });
 
-    ws.on('close', () => {
-      broadcast({ type: 'online', count: [...wss.clients].filter(c => c.readyState === 1).length });
-    });
+    ws.on('close', () => { broadcastOnline(); });
 
   } catch { ws.close(); }
 });
