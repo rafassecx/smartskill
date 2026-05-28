@@ -87,7 +87,7 @@
       });
       const data = await res.json();
       if (res.ok) {
-        window.location.href = data.role === 'admin' ? '/admin.html' : '/dashboard.html';
+        window.location.href = data.role === 'admin' ? '/admin.html' : '/dashboard.html#videos';
       } else {
         errEl.textContent = data.error;
         btn.disabled = false; btn.textContent = 'Войти';
@@ -113,7 +113,7 @@
       });
       const data = await res.json();
       if (res.ok) {
-        window.location.href = data.role === 'admin' ? '/admin.html' : '/dashboard.html';
+        window.location.href = data.role === 'admin' ? '/admin.html' : '/dashboard.html#videos';
       } else {
         errEl.textContent = data.error;
         btn.disabled = false; btn.textContent = 'Создать аккаунт';

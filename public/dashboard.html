@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Мой профиль — Smart Skill</title>
+  <title>Smart Skill</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="app-page">
@@ -12,11 +12,13 @@
       <div class="logo-icon small">S</div>
       <span>Smart Skill</span>
     </div>
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="showTab('profile', event)">Профиль</button>
-      <button class="nav-tab" onclick="showTab('videos', event)">Видео</button>
+    <button class="burger" onclick="toggleMobileMenu()" id="burgerBtn">☰</button>
+    <div class="nav-tabs" id="navTabs">
+      <button class="nav-tab" id="tab-btn-videos" onclick="showTab('videos', event)">Видео</button>
+      <button class="nav-tab" id="tab-btn-profile" onclick="showTab('profile', event)">Профиль</button>
+      <button onclick="logout()" class="btn-logout mobile-logout">Выйти</button>
     </div>
-    <div class="nav-right">
+    <div class="nav-right desktop-right">
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
     </div>
@@ -24,8 +26,14 @@
 
   <main class="main-content">
 
+    <!-- Videos tab -->
+    <div id="tab-videos" class="hidden">
+      <h2 class="section-title">Видео</h2>
+      <div id="videoGrid" class="video-grid"></div>
+    </div>
+
     <!-- Profile tab -->
-    <div id="tab-profile">
+    <div id="tab-profile" class="hidden">
       <div class="profile-card">
         <div class="profile-header">
           <div class="avatar-wrap">
@@ -70,46 +78,61 @@
       </div>
     </div>
 
-    <!-- Videos tab -->
-    <div id="tab-videos" class="hidden">
-      <h2 class="section-title">Видео</h2>
-      <div id="videoGrid" class="video-grid"></div>
-    </div>
-
   </main>
 
   <script>
     let userData = null;
     let editing = false;
+    let refreshInterval = null;
+    let currentTab = 'videos';
 
     function showTab(name, e) {
       document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
       document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
       document.getElementById('tab-' + name).classList.remove('hidden');
-      if (e) e.target.classList.add('active');
+      const btn = document.getElementById('tab-btn-' + name);
+      if (btn) btn.classList.add('active');
+      currentTab = name;
+      closeMobileMenu();
       if (name === 'videos') loadVideos();
+      window.location.hash = name;
+    }
+
+    function toggleMobileMenu() {
+      document.getElementById('navTabs').classList.toggle('mobile-open');
+    }
+    function closeMobileMenu() {
+      document.getElementById('navTabs').classList.remove('mobile-open');
     }
 
     async function loadProfile() {
       const res = await fetch('/api/profile');
       if (!res.ok) { window.location.href = '/index.html'; return; }
-      userData = await res.json();
-      if (userData.role === 'admin') { window.location.href = '/admin.html'; return; }
+      const fresh = await res.json();
+      if (fresh.role === 'admin') { window.location.href = '/admin.html'; return; }
+
+      // Detect role change
+      if (userData && userData.role !== fresh.role) {
+        window.location.reload();
+        return;
+      }
+      userData = fresh;
+      document.getElementById('navUsername').textContent = userData.username;
       renderProfile();
     }
 
     function renderProfile() {
-      document.getElementById('navUsername').textContent = userData.username;
       const avatar = document.getElementById('avatarCircle');
       if (userData.avatar_data) {
         avatar.style.backgroundImage = `url(${userData.avatar_data})`;
         avatar.style.backgroundSize = 'cover';
         avatar.style.backgroundPosition = 'center';
         avatar.textContent = '';
+        avatar.style.background = '';
       } else {
+        avatar.style.backgroundImage = '';
         avatar.textContent = userData.username[0].toUpperCase();
         avatar.style.background = userData.avatar_color;
-        avatar.style.backgroundImage = '';
       }
       document.getElementById('profileUsername').textContent = userData.username;
       document.getElementById('profileEmail').textContent = userData.email;
@@ -131,6 +154,7 @@
         const d = await res.json();
         userData.avatar_data = d.avatar_data;
         renderProfile();
+        showToast('Аватар обновлён!');
       }
     }
 
@@ -149,12 +173,13 @@
     async function saveProfile(e) {
       e.preventDefault();
       const res = await fetch('/api/profile', {
-        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ full_name: editFullName.value, phone: editPhone.value, bio: editBio.value })
       });
       if (res.ok) {
-        document.getElementById('editSuccess').textContent = 'Сохранено!';
-        setTimeout(() => { document.getElementById('editSuccess').textContent = ''; loadProfile(); toggleEdit(); }, 800);
+        showToast('Профиль сохранён!');
+        await loadProfile();
+        toggleEdit();
       }
     }
 
@@ -173,8 +198,18 @@
       `).join('');
     }
 
+    let toastTimer;
+    function showToast(msg) {
+      let t = document.getElementById('toast');
+      if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+      t.textContent = msg;
+      t.classList.add('toast-show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('toast-show'), 3000);
+    }
+
     function formatDate(d) {
-      return new Date(d).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
     async function logout() {
@@ -182,7 +217,18 @@
       window.location.href = '/index.html';
     }
 
-    loadProfile();
+    async function init() {
+      await loadProfile();
+      // Start on videos tab (or hash)
+      const hash = window.location.hash.replace('#', '') || 'videos';
+      showTab(['videos', 'profile'].includes(hash) ? hash : 'videos', null);
+      // Auto-refresh profile every 30s
+      refreshInterval = setInterval(loadProfile, 30000);
+      // Auto-refresh videos every 60s when on videos tab
+      setInterval(() => { if (currentTab === 'videos') loadVideos(); }, 60000);
+    }
+
+    init();
   </script>
 </body>
 </html>
