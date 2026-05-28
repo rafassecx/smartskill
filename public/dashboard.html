@@ -12,6 +12,10 @@
       <div class="logo-icon small">S</div>
       <span>Smart Skill</span>
     </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showTab('profile', event)">Профиль</button>
+      <button class="nav-tab" onclick="showTab('videos', event)">Видео</button>
+    </div>
     <div class="nav-right">
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
@@ -19,94 +23,96 @@
   </nav>
 
   <main class="main-content">
-    <div class="profile-card">
-      <div class="profile-header">
-        <div id="avatarCircle" class="avatar-circle large"></div>
-        <div class="profile-header-info">
-          <h1 id="profileUsername"></h1>
-          <span id="profileRole" class="role-badge"></span>
-          <p id="profileEmail" class="profile-email"></p>
-        </div>
-        <button onclick="toggleEdit()" class="btn-secondary" id="editBtn">Редактировать</button>
-      </div>
 
-      <!-- View mode -->
-      <div id="viewMode" class="profile-body">
-        <div class="info-grid">
-          <div class="info-item">
-            <label>Полное имя</label>
-            <p id="viewFullName">—</p>
+    <!-- Profile tab -->
+    <div id="tab-profile">
+      <div class="profile-card">
+        <div class="profile-header">
+          <div class="avatar-wrap">
+            <div id="avatarCircle" class="avatar-circle large"></div>
+            <label class="avatar-upload-btn" title="Загрузить фото">
+              <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
+              📷
+            </label>
           </div>
-          <div class="info-item">
-            <label>Телефон</label>
-            <p id="viewPhone">—</p>
+          <div class="profile-header-info">
+            <h1 id="profileUsername"></h1>
+            <span class="role-badge role-user">Пользователь</span>
+            <p id="profileEmail" class="profile-email"></p>
           </div>
-          <div class="info-item">
-            <label>Email</label>
-            <p id="viewEmail">—</p>
-          </div>
-          <div class="info-item">
-            <label>Дата регистрации</label>
-            <p id="viewCreated">—</p>
-          </div>
-          <div class="info-item">
-            <label>Последний вход</label>
-            <p id="viewLastLogin">—</p>
-          </div>
+          <button onclick="toggleEdit()" class="btn-secondary" id="editBtn">Редактировать</button>
         </div>
-        <div class="info-item full-width">
-          <label>О себе</label>
-          <p id="viewBio">—</p>
-        </div>
-      </div>
 
-      <!-- Edit mode -->
-      <form id="editMode" class="profile-body hidden" onsubmit="saveProfile(event)">
-        <div class="info-grid">
-          <div class="form-group">
-            <label>Полное имя</label>
-            <input type="text" id="editFullName" placeholder="Иван Иванов">
+        <div id="viewMode" class="profile-body">
+          <div class="info-grid">
+            <div class="info-item"><label>Полное имя</label><p id="viewFullName">—</p></div>
+            <div class="info-item"><label>Телефон</label><p id="viewPhone">—</p></div>
+            <div class="info-item"><label>Email</label><p id="viewEmail">—</p></div>
+            <div class="info-item"><label>Дата регистрации</label><p id="viewCreated">—</p></div>
+            <div class="info-item"><label>Последний вход</label><p id="viewLastLogin">—</p></div>
           </div>
-          <div class="form-group">
-            <label>Телефон</label>
-            <input type="tel" id="editPhone" placeholder="+7 999 000 00 00">
+          <div class="info-item full-width"><label>О себе</label><p id="viewBio">—</p></div>
+        </div>
+
+        <form id="editMode" class="profile-body hidden" onsubmit="saveProfile(event)">
+          <div class="info-grid">
+            <div class="form-group"><label>Полное имя</label><input type="text" id="editFullName"></div>
+            <div class="form-group"><label>Телефон</label><input type="tel" id="editPhone"></div>
           </div>
-        </div>
-        <div class="form-group">
-          <label>О себе</label>
-          <textarea id="editBio" rows="4" placeholder="Расскажите о себе..."></textarea>
-        </div>
-        <div id="editError" class="error-msg"></div>
-        <div id="editSuccess" class="success-msg"></div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">Сохранить</button>
-          <button type="button" onclick="toggleEdit()" class="btn-ghost">Отмена</button>
-        </div>
-      </form>
+          <div class="form-group"><label>О себе</label><textarea id="editBio" rows="4"></textarea></div>
+          <div id="editError" class="error-msg"></div>
+          <div id="editSuccess" class="success-msg"></div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Сохранить</button>
+            <button type="button" onclick="toggleEdit()" class="btn-ghost">Отмена</button>
+          </div>
+        </form>
+      </div>
     </div>
+
+    <!-- Videos tab -->
+    <div id="tab-videos" class="hidden">
+      <h2 class="section-title">Видео</h2>
+      <div id="videoGrid" class="video-grid"></div>
+    </div>
+
   </main>
 
   <script>
     let userData = null;
     let editing = false;
 
+    function showTab(name, e) {
+      document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
+      document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.remove('hidden');
+      if (e) e.target.classList.add('active');
+      if (name === 'videos') loadVideos();
+    }
+
     async function loadProfile() {
       const res = await fetch('/api/profile');
       if (!res.ok) { window.location.href = '/index.html'; return; }
       userData = await res.json();
-
       if (userData.role === 'admin') { window.location.href = '/admin.html'; return; }
+      renderProfile();
+    }
 
+    function renderProfile() {
       document.getElementById('navUsername').textContent = userData.username;
       const avatar = document.getElementById('avatarCircle');
-      avatar.textContent = userData.username[0].toUpperCase();
-      avatar.style.background = userData.avatar_color;
-
+      if (userData.avatar_data) {
+        avatar.style.backgroundImage = `url(${userData.avatar_data})`;
+        avatar.style.backgroundSize = 'cover';
+        avatar.style.backgroundPosition = 'center';
+        avatar.textContent = '';
+      } else {
+        avatar.textContent = userData.username[0].toUpperCase();
+        avatar.style.background = userData.avatar_color;
+        avatar.style.backgroundImage = '';
+      }
       document.getElementById('profileUsername').textContent = userData.username;
-      document.getElementById('profileRole').textContent = 'Пользователь';
-      document.getElementById('profileRole').className = 'role-badge role-user';
       document.getElementById('profileEmail').textContent = userData.email;
-
       document.getElementById('viewFullName').textContent = userData.full_name || '—';
       document.getElementById('viewPhone').textContent = userData.phone || '—';
       document.getElementById('viewEmail').textContent = userData.email;
@@ -115,8 +121,17 @@
       document.getElementById('viewBio').textContent = userData.bio || '—';
     }
 
-    function formatDate(dateStr) {
-      return new Date(dateStr).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    async function uploadAvatar(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append('avatar', file);
+      const res = await fetch('/api/upload/avatar', { method: 'POST', body: form });
+      if (res.ok) {
+        const d = await res.json();
+        userData.avatar_data = d.avatar_data;
+        renderProfile();
+      }
     }
 
     function toggleEdit() {
@@ -133,25 +148,33 @@
 
     async function saveProfile(e) {
       e.preventDefault();
-      const errEl = document.getElementById('editError');
-      const sucEl = document.getElementById('editSuccess');
-      errEl.textContent = ''; sucEl.textContent = '';
-
       const res = await fetch('/api/profile', {
         method: 'PUT', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          full_name: editFullName.value,
-          phone: editPhone.value,
-          bio: editBio.value
-        })
+        body: JSON.stringify({ full_name: editFullName.value, phone: editPhone.value, bio: editBio.value })
       });
       if (res.ok) {
-        sucEl.textContent = 'Профиль обновлён!';
-        setTimeout(() => { sucEl.textContent = ''; loadProfile(); toggleEdit(); }, 1000);
-      } else {
-        const d = await res.json();
-        errEl.textContent = d.error;
+        document.getElementById('editSuccess').textContent = 'Сохранено!';
+        setTimeout(() => { document.getElementById('editSuccess').textContent = ''; loadProfile(); toggleEdit(); }, 800);
       }
+    }
+
+    async function loadVideos() {
+      const res = await fetch('/api/videos');
+      const videos = await res.json();
+      const el = document.getElementById('videoGrid');
+      if (!videos.length) { el.innerHTML = '<p class="empty-msg">Видео пока не добавлены</p>'; return; }
+      el.innerHTML = videos.map(v => `
+        <div class="video-card">
+          <div class="video-embed">
+            <iframe src="https://www.youtube.com/embed/${v.youtube_id}" frameborder="0" allowfullscreen loading="lazy"></iframe>
+          </div>
+          <p class="video-title">${v.title}</p>
+        </div>
+      `).join('');
+    }
+
+    function formatDate(d) {
+      return new Date(d).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     }
 
     async function logout() {

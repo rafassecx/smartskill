@@ -13,12 +13,13 @@
       <span>Smart Skill <span class="admin-label">Админ</span></span>
     </div>
     <div class="nav-tabs">
-      <button class="nav-tab active" onclick="showSection('dashboard')">Обзор</button>
-      <button class="nav-tab" onclick="showSection('users')">Пользователи</button>
-      <button class="nav-tab" onclick="showSection('myprofile')">Мой профиль</button>
+      <button class="nav-tab active" onclick="showSection('dashboard', event)">Обзор</button>
+      <button class="nav-tab" onclick="showSection('users', event)">Пользователи</button>
+      <button class="nav-tab" onclick="showSection('videos', event)">Видео</button>
+      <button class="nav-tab" onclick="showSection('myprofile', event)">Мой профиль</button>
     </div>
     <div class="nav-right">
-      <span id="liveIndicator" class="live-dot" title="Обновления в реальном времени"></span>
+      <span id="liveIndicator" class="live-dot" title="Реальное время"></span>
       <span id="navUsername" class="nav-username"></span>
       <button onclick="logout()" class="btn-logout">Выйти</button>
     </div>
@@ -26,26 +27,26 @@
 
   <main class="main-content">
 
-    <!-- Dashboard Section -->
+    <!-- Dashboard -->
     <section id="section-dashboard" class="section active">
       <h2 class="section-title">Обзор</h2>
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-icon users-icon">👥</div>
+          <div class="stat-icon">👥</div>
           <div class="stat-info">
             <span id="statTotal" class="stat-num">—</span>
             <span class="stat-label">Всего пользователей</span>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon admin-icon">🛡️</div>
+          <div class="stat-icon">🛡️</div>
           <div class="stat-info">
             <span id="statAdmins" class="stat-num">—</span>
             <span class="stat-label">Администраторов</span>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon today-icon">📅</div>
+          <div class="stat-icon">📅</div>
           <div class="stat-info">
             <span id="statToday" class="stat-num">—</span>
             <span class="stat-label">Зарегистрировано сегодня</span>
@@ -54,24 +55,55 @@
       </div>
       <div class="recent-card">
         <h3>Последние регистрации</h3>
-        <div id="recentUsers" class="users-list compact"></div>
+        <div id="recentUsers" class="users-list"></div>
       </div>
     </section>
 
-    <!-- Users Section -->
+    <!-- Users -->
     <section id="section-users" class="section">
       <div class="section-header">
         <h2 class="section-title">Пользователи</h2>
-        <input type="text" id="searchInput" placeholder="Поиск по имени или email..." class="search-input" oninput="filterUsers()">
+        <div class="filters-row">
+          <input type="text" id="searchInput" placeholder="Поиск..." class="search-input" oninput="applyFilters()">
+          <select id="roleFilter" class="role-filter" onchange="applyFilters()">
+            <option value="all">Все роли</option>
+            <option value="user">Пользователи</option>
+            <option value="admin">Администраторы</option>
+          </select>
+          <button onclick="exportCSV()" class="btn-export">⬇ CSV</button>
+        </div>
       </div>
       <div id="usersList" class="users-table-wrap"></div>
     </section>
 
-    <!-- My Profile Section -->
+    <!-- Videos -->
+    <section id="section-videos" class="section">
+      <div class="section-header">
+        <h2 class="section-title">Видео</h2>
+      </div>
+      <div class="video-add-card">
+        <h3>Добавить видео</h3>
+        <form onsubmit="addVideo(event)" class="video-add-form">
+          <input type="text" id="videoTitle" placeholder="Название видео" required>
+          <input type="text" id="videoUrl" placeholder="Ссылка YouTube (https://youtube.com/watch?v=...)" required>
+          <button type="submit" class="btn-primary" style="width:auto;padding:10px 24px">Добавить</button>
+        </form>
+        <div id="videoError" class="error-msg"></div>
+      </div>
+      <div id="adminVideoList" class="admin-video-list"></div>
+    </section>
+
+    <!-- My Profile -->
     <section id="section-myprofile" class="section">
       <div class="profile-card">
         <div class="profile-header">
-          <div id="adminAvatarCircle" class="avatar-circle large"></div>
+          <div class="avatar-wrap">
+            <div id="adminAvatarCircle" class="avatar-circle large"></div>
+            <label class="avatar-upload-btn" title="Загрузить фото">
+              <input type="file" accept="image/*" style="display:none" onchange="uploadAdminAvatar(this)">
+              📷
+            </label>
+          </div>
           <div class="profile-header-info">
             <h1 id="adminUsername"></h1>
             <span class="role-badge role-admin">Администратор</span>
@@ -81,43 +113,19 @@
         </div>
         <div id="adminViewMode" class="profile-body">
           <div class="info-grid">
-            <div class="info-item">
-              <label>Полное имя</label>
-              <p id="adminViewFullName">—</p>
-            </div>
-            <div class="info-item">
-              <label>Телефон</label>
-              <p id="adminViewPhone">—</p>
-            </div>
-            <div class="info-item">
-              <label>Email</label>
-              <p id="adminViewEmail">—</p>
-            </div>
-            <div class="info-item">
-              <label>Дата регистрации</label>
-              <p id="adminViewCreated">—</p>
-            </div>
+            <div class="info-item"><label>Полное имя</label><p id="adminViewFullName">—</p></div>
+            <div class="info-item"><label>Телефон</label><p id="adminViewPhone">—</p></div>
+            <div class="info-item"><label>Email</label><p id="adminViewEmail">—</p></div>
+            <div class="info-item"><label>Дата регистрации</label><p id="adminViewCreated">—</p></div>
           </div>
-          <div class="info-item full-width">
-            <label>О себе</label>
-            <p id="adminViewBio">—</p>
-          </div>
+          <div class="info-item full-width"><label>О себе</label><p id="adminViewBio">—</p></div>
         </div>
         <form id="adminEditMode" class="profile-body hidden" onsubmit="saveAdminProfile(event)">
           <div class="info-grid">
-            <div class="form-group">
-              <label>Полное имя</label>
-              <input type="text" id="adminEditFullName">
-            </div>
-            <div class="form-group">
-              <label>Телефон</label>
-              <input type="tel" id="adminEditPhone">
-            </div>
+            <div class="form-group"><label>Полное имя</label><input type="text" id="adminEditFullName"></div>
+            <div class="form-group"><label>Телефон</label><input type="tel" id="adminEditPhone"></div>
           </div>
-          <div class="form-group">
-            <label>О себе</label>
-            <textarea id="adminEditBio" rows="4"></textarea>
-          </div>
+          <div class="form-group"><label>О себе</label><textarea id="adminEditBio" rows="4"></textarea></div>
           <div id="adminEditError" class="error-msg"></div>
           <div id="adminEditSuccess" class="success-msg"></div>
           <div class="form-actions">
@@ -129,7 +137,7 @@
     </section>
   </main>
 
-  <!-- User Detail Modal -->
+  <!-- User Modal -->
   <div id="userModal" class="modal-overlay hidden" onclick="closeModal(event)">
     <div class="modal">
       <button class="modal-close" onclick="document.getElementById('userModal').classList.add('hidden')">×</button>
@@ -141,13 +149,13 @@
     let allUsers = [];
     let adminData = null;
     let adminEditing = false;
+    let prevUserIds = new Set();
 
     async function init() {
       const res = await fetch('/api/profile');
       if (!res.ok) { window.location.href = '/index.html'; return; }
       adminData = await res.json();
       if (adminData.role !== 'admin') { window.location.href = '/dashboard.html'; return; }
-
       document.getElementById('navUsername').textContent = adminData.username;
       fillAdminProfile();
       loadStats();
@@ -155,35 +163,9 @@
       connectSSE();
     }
 
-    function connectSSE() {
-      const es = new EventSource('/api/admin/stream');
-
-      es.addEventListener('connected', () => {
-        document.getElementById('liveIndicator').classList.add('live-dot--on');
-      });
-
-      es.addEventListener('user_registered', (e) => {
-        loadUsers();
-        loadStats();
-        showToast('Новый пользователь зарегистрировался');
-      });
-
-      es.addEventListener('user_deleted', (e) => {
-        loadUsers();
-        loadStats();
-      });
-
-      es.onerror = () => {
-        document.getElementById('liveIndicator').classList.remove('live-dot--on');
-        setTimeout(connectSSE, 3000);
-        es.close();
-      };
-    }
-
     function fillAdminProfile() {
       const avatar = document.getElementById('adminAvatarCircle');
-      avatar.textContent = adminData.username[0].toUpperCase();
-      avatar.style.background = adminData.avatar_color;
+      setAvatar(avatar, adminData);
       document.getElementById('adminUsername').textContent = adminData.username;
       document.getElementById('adminEmail').textContent = adminData.email;
       document.getElementById('adminViewFullName').textContent = adminData.full_name || '—';
@@ -193,9 +175,46 @@
       document.getElementById('adminViewBio').textContent = adminData.bio || '—';
     }
 
+    function setAvatar(el, user) {
+      if (user.avatar_data) {
+        el.style.backgroundImage = `url(${user.avatar_data})`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        el.textContent = '';
+        el.style.background = '';
+      } else {
+        el.style.backgroundImage = '';
+        el.textContent = user.username[0].toUpperCase();
+        el.style.background = user.avatar_color;
+      }
+    }
+
+    async function uploadAdminAvatar(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append('avatar', file);
+      const res = await fetch('/api/upload/avatar', { method: 'POST', body: form });
+      if (res.ok) {
+        const d = await res.json();
+        adminData.avatar_data = d.avatar_data;
+        fillAdminProfile();
+      }
+    }
+
+    function connectSSE() {
+      const es = new EventSource('/api/admin/stream');
+      es.addEventListener('connected', () => document.getElementById('liveIndicator').classList.add('live-dot--on'));
+      es.addEventListener('user_registered', () => { loadUsers(); loadStats(); showToast('🆕 Новый пользователь зарегистрировался'); });
+      es.addEventListener('user_deleted', () => { loadUsers(); loadStats(); });
+      es.onerror = () => {
+        document.getElementById('liveIndicator').classList.remove('live-dot--on');
+        setTimeout(connectSSE, 3000); es.close();
+      };
+    }
+
     async function loadStats() {
-      const res = await fetch('/api/admin/stats');
-      const s = await res.json();
+      const s = await fetch('/api/admin/stats').then(r => r.json());
       document.getElementById('statTotal').textContent = s.total;
       document.getElementById('statAdmins').textContent = s.admins;
       document.getElementById('statToday').textContent = s.today;
@@ -204,37 +223,89 @@
     async function loadUsers() {
       const res = await fetch('/api/admin/users');
       allUsers = await res.json();
-      renderUsersTable(allUsers);
+      applyFilters();
       renderRecentUsers(allUsers.slice(0, 5));
+    }
+
+    function applyFilters() {
+      const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+      const role = document.getElementById('roleFilter')?.value || 'all';
+      const filtered = allUsers.filter(u => {
+        const matchRole = role === 'all' || u.role === role;
+        const matchSearch = !search || u.username.toLowerCase().includes(search) || u.email.toLowerCase().includes(search) || (u.full_name || '').toLowerCase().includes(search);
+        return matchRole && matchSearch;
+      });
+      renderUsersTable(filtered);
     }
 
     function renderRecentUsers(users) {
       const el = document.getElementById('recentUsers');
       if (!users.length) { el.innerHTML = '<p class="empty-msg">Нет пользователей</p>'; return; }
       el.innerHTML = users.map(u => `
-        <div class="user-row compact" onclick="showUser(${u.id})">
-          <div class="avatar-circle small" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
-          <div class="user-row-info">
-            <strong>${u.username}</strong>
-            <span>${u.email}</span>
-          </div>
-          <span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? 'Админ' : 'Пользователь'}</span>
+        <div class="user-row" onclick="showUser(${u.id})">
+          <div class="avatar-circle small ${u.avatar_data ? 'has-photo' : ''}" style="${u.avatar_data ? `background-image:url(${u.avatar_data});background-size:cover;background-position:center` : `background:${u.avatar_color}`}">${u.avatar_data ? '' : u.username[0].toUpperCase()}</div>
+          <div class="user-row-info"><strong>${u.username}</strong><span>${u.email}</span></div>
+          <span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? 'Админ' : 'Польз.'}</span>
           <span class="user-date">${formatDate(u.created_at)}</span>
         </div>
       `).join('');
     }
 
-    function filterUsers() {
-      const q = document.getElementById('searchInput').value.toLowerCase();
-      renderUsersTable(allUsers.filter(u => u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.full_name || '').toLowerCase().includes(q)));
+    function renderUsersTable(users) {
+      const el = document.getElementById('usersList');
+      if (!users.length) { el.innerHTML = '<p class="empty-msg">Пользователи не найдены</p>'; prevUserIds = new Set(); return; }
+      const newIds = new Set(users.map(u => u.id));
+      el.innerHTML = `
+        <table class="users-table">
+          <thead><tr>
+            <th>Пользователь</th><th>Email</th><th>Пароль</th>
+            <th>Полное имя</th><th>Телефон</th><th>Роль</th>
+            <th>Дата регистрации</th><th>Действия</th>
+          </tr></thead>
+          <tbody>
+            ${users.map(u => `
+              <tr onclick="showUser(${u.id})" class="table-row${prevUserIds.size && !prevUserIds.has(u.id) ? ' row-new' : ''}">
+                <td><div class="cell-user">
+                  <div class="avatar-circle xsmall" style="${u.avatar_data ? `background-image:url(${u.avatar_data});background-size:cover;background-position:center` : `background:${u.avatar_color}`}">${u.avatar_data ? '' : u.username[0].toUpperCase()}</div>
+                  ${u.username}
+                </div></td>
+                <td>${u.email}</td>
+                <td><span class="password-cell">${u.plain_password || '—'}</span></td>
+                <td>${u.full_name || '—'}</td>
+                <td>${u.phone || '—'}</td>
+                <td><span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? 'Админ' : 'Польз.'}</span></td>
+                <td>${formatDate(u.created_at)}</td>
+                <td onclick="event.stopPropagation()"></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      document.querySelectorAll('.table-row').forEach((row, i) => {
+        const u = users[i];
+        const cell = row.querySelector('td:last-child');
+        if (u.email === adminData?.email) {
+          cell.innerHTML = '<span class="self-label">Это вы</span>';
+        } else {
+          cell.innerHTML = '<button class="btn-danger-sm">Удалить</button>';
+          cell.querySelector('button').onclick = e => { e.stopPropagation(); deleteUser(u.id, u.username); };
+        }
+      });
+      prevUserIds = newIds;
+    }
+
+    function exportCSV() {
+      window.location.href = '/api/admin/export/csv';
     }
 
     async function showUser(id) {
-      const res = await fetch(`/api/admin/users/${id}`);
-      const u = await res.json();
+      const u = await fetch(`/api/admin/users/${id}`).then(r => r.json());
+      const avatarStyle = u.avatar_data
+        ? `background-image:url(${u.avatar_data});background-size:cover;background-position:center`
+        : `background:${u.avatar_color}`;
       document.getElementById('modalContent').innerHTML = `
         <div class="modal-user-header">
-          <div class="avatar-circle large" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
+          <div class="avatar-circle large" style="${avatarStyle}">${u.avatar_data ? '' : u.username[0].toUpperCase()}</div>
           <div>
             <h2>${u.username}</h2>
             <span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? 'Администратор' : 'Пользователь'}</span>
@@ -250,10 +321,7 @@
           <div class="info-item"><label>Последний вход</label><p>${u.last_login ? formatDate(u.last_login) : 'Ещё не входил'}</p></div>
         </div>
         <div class="info-item full-width" style="margin-top:16px"><label>О себе</label><p>${u.bio || '—'}</p></div>
-        ${u.email !== adminData?.email ? `
-          <div class="modal-actions">
-            <button onclick="deleteUser(${u.id}, '${u.username}'); document.getElementById('userModal').classList.add('hidden')" class="btn-danger">Удалить пользователя</button>
-          </div>` : ''}
+        ${u.email !== adminData?.email ? `<div class="modal-actions"><button onclick="deleteUser(${u.id},'${u.username}');document.getElementById('userModal').classList.add('hidden')" class="btn-danger">Удалить пользователя</button></div>` : ''}
       `;
       document.getElementById('userModal').classList.remove('hidden');
     }
@@ -263,17 +331,58 @@
     }
 
     async function deleteUser(id, username) {
-      if (!confirm(`Удалить пользователя "${username}"? Это действие нельзя отменить.`)) return;
+      if (!confirm(`Удалить "${username}"?`)) return;
       const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       if (res.ok) { loadUsers(); loadStats(); }
       else { const d = await res.json(); alert(d.error); }
     }
 
-    function showSection(name) {
+    // Videos
+    async function loadAdminVideos() {
+      const videos = await fetch('/api/videos').then(r => r.json());
+      const el = document.getElementById('adminVideoList');
+      if (!videos.length) { el.innerHTML = '<p class="empty-msg">Видео не добавлены</p>'; return; }
+      el.innerHTML = videos.map(v => `
+        <div class="admin-video-item">
+          <img src="https://img.youtube.com/vi/${v.youtube_id}/mqdefault.jpg" class="video-thumb">
+          <div class="admin-video-info">
+            <strong>${v.title}</strong>
+            <span>youtube.com/watch?v=${v.youtube_id}</span>
+            <span class="user-date">${formatDate(v.added_at)}</span>
+          </div>
+          <button onclick="deleteVideo(${v.id})" class="btn-danger-sm">Удалить</button>
+        </div>
+      `).join('');
+    }
+
+    async function addVideo(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('videoError');
+      errEl.textContent = '';
+      const res = await fetch('/api/admin/videos', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title: videoTitle.value, youtube_url: videoUrl.value })
+      });
+      if (res.ok) {
+        videoTitle.value = ''; videoUrl.value = '';
+        loadAdminVideos();
+      } else {
+        const d = await res.json(); errEl.textContent = d.error;
+      }
+    }
+
+    async function deleteVideo(id) {
+      if (!confirm('Удалить видео?')) return;
+      await fetch(`/api/admin/videos/${id}`, { method: 'DELETE' });
+      loadAdminVideos();
+    }
+
+    function showSection(name, e) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
       document.getElementById('section-' + name).classList.add('active');
-      event.target.classList.add('active');
+      if (e) e.target.classList.add('active');
+      if (name === 'videos') loadAdminVideos();
     }
 
     function toggleAdminEdit() {
@@ -291,87 +400,29 @@
     async function saveAdminProfile(e) {
       e.preventDefault();
       const res = await fetch('/api/profile', {
-        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        method: 'PUT', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ full_name: adminEditFullName.value, phone: adminEditPhone.value, bio: adminEditBio.value })
       });
       if (res.ok) {
-        document.getElementById('adminEditSuccess').textContent = 'Профиль обновлён!';
-        const refreshed = await fetch('/api/profile');
-        adminData = await refreshed.json();
-        setTimeout(() => { document.getElementById('adminEditSuccess').textContent = ''; fillAdminProfile(); toggleAdminEdit(); }, 1000);
+        document.getElementById('adminEditSuccess').textContent = 'Сохранено!';
+        const r = await fetch('/api/profile');
+        adminData = await r.json();
+        setTimeout(() => { document.getElementById('adminEditSuccess').textContent = ''; fillAdminProfile(); toggleAdminEdit(); }, 800);
       }
-    }
-
-    let prevUserIds = new Set();
-
-    function renderUsersTable(users) {
-      const el = document.getElementById('usersList');
-      if (!users.length) { el.innerHTML = '<p class="empty-msg">Пользователи не найдены</p>'; prevUserIds = new Set(); return; }
-      const newIds = new Set(users.map(u => u.id));
-      el.innerHTML = `
-        <table class="users-table">
-          <thead>
-            <tr>
-              <th>Пользователь</th>
-              <th>Email</th>
-              <th>Пароль</th>
-              <th>Полное имя</th>
-              <th>Телефон</th>
-              <th>Роль</th>
-              <th>Дата регистрации</th>
-              <th>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${users.map(u => `
-              <tr onclick="showUser(${u.id})" class="table-row${prevUserIds.size && !prevUserIds.has(u.id) ? ' row-new' : ''}">
-                <td>
-                  <div class="cell-user">
-                    <div class="avatar-circle xsmall" style="background:${u.avatar_color}">${u.username[0].toUpperCase()}</div>
-                    ${u.username}
-                  </div>
-                </td>
-                <td>${u.email}</td>
-                <td><span class="password-cell">${u.plain_password || '—'}</span></td>
-                <td>${u.full_name || '—'}</td>
-                <td>${u.phone || '—'}</td>
-                <td><span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? 'Админ' : 'Польз.'}</span></td>
-                <td>${formatDate(u.created_at)}</td>
-                <td onclick="event.stopPropagation()"></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-      document.querySelectorAll('.table-row').forEach((row, i) => {
-        const u = users[i];
-        const actionCell = row.querySelector('td:last-child');
-        if (u.email === adminData?.email) {
-          actionCell.innerHTML = '<span class="self-label">Это вы</span>';
-        } else {
-          actionCell.innerHTML = `<button class="btn-danger-sm">Удалить</button>`;
-          actionCell.querySelector('button').onclick = (e) => { e.stopPropagation(); deleteUser(u.id, u.username); };
-        }
-      });
-      prevUserIds = newIds;
     }
 
     let toastTimer;
     function showToast(msg) {
       let t = document.getElementById('toast');
-      if (!t) {
-        t = document.createElement('div');
-        t.id = 'toast';
-        document.body.appendChild(t);
-      }
+      if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
       t.textContent = msg;
       t.classList.add('toast-show');
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => t.classList.remove('toast-show'), 3000);
     }
 
-    function formatDate(dateStr) {
-      return new Date(dateStr).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    function formatDate(d) {
+      return new Date(d).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     }
 
     async function logout() {

