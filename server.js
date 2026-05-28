@@ -147,4 +147,5 @@ app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
   res.json({ total, admins, today });
 });
 
-app.listen(3000, () => console.log('Сервер запущен: http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Сервер запущен: http://localhost:${PORT}`));
