@@ -137,6 +137,19 @@
     </section>
   </main>
 
+  <!-- Confirm Dialog -->
+  <div id="confirmOverlay" class="modal-overlay hidden">
+    <div class="confirm-dialog">
+      <div class="confirm-icon">🗑️</div>
+      <h3 id="confirmTitle">Удалить пользователя?</h3>
+      <p id="confirmText"></p>
+      <div class="confirm-actions">
+        <button id="confirmOk" class="btn-danger">Удалить</button>
+        <button onclick="closeConfirm()" class="btn-ghost">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <!-- User Modal -->
   <div id="userModal" class="modal-overlay hidden" onclick="closeModal(event)">
     <div class="modal">
@@ -321,7 +334,7 @@
           <div class="info-item"><label>Последний вход</label><p>${u.last_login ? formatDate(u.last_login) : 'Ещё не входил'}</p></div>
         </div>
         <div class="info-item full-width" style="margin-top:16px"><label>О себе</label><p>${u.bio || '—'}</p></div>
-        ${u.email !== adminData?.email ? `<div class="modal-actions"><button onclick="deleteUser(${u.id},'${u.username}');document.getElementById('userModal').classList.add('hidden')" class="btn-danger">Удалить пользователя</button></div>` : ''}
+        ${u.email !== adminData?.email ? `<div class="modal-actions"><button onclick="document.getElementById('userModal').classList.add('hidden');deleteUser(${u.id},'${u.username}')" class="btn-danger">Удалить пользователя</button></div>` : ''}
       `;
       document.getElementById('userModal').classList.remove('hidden');
     }
@@ -330,11 +343,28 @@
       if (e.target.id === 'userModal') document.getElementById('userModal').classList.add('hidden');
     }
 
+    function showConfirm(title, text, onOk) {
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmText').textContent = text;
+      document.getElementById('confirmOverlay').classList.remove('hidden');
+      const btn = document.getElementById('confirmOk');
+      btn.onclick = async () => { closeConfirm(); await onOk(); };
+    }
+
+    function closeConfirm() {
+      document.getElementById('confirmOverlay').classList.add('hidden');
+    }
+
     async function deleteUser(id, username) {
-      if (!confirm(`Удалить "${username}"?`)) return;
-      const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-      if (res.ok) { loadUsers(); loadStats(); }
-      else { const d = await res.json(); alert(d.error); }
+      showConfirm(
+        'Удалить пользователя?',
+        `Пользователь "${username}" будет удалён навсегда. Это действие нельзя отменить.`,
+        async () => {
+          const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+          if (res.ok) { loadUsers(); loadStats(); showToast('Пользователь удалён'); }
+          else { const d = await res.json(); showToast('Ошибка: ' + d.error); }
+        }
+      );
     }
 
     // Videos
@@ -372,9 +402,15 @@
     }
 
     async function deleteVideo(id) {
-      if (!confirm('Удалить видео?')) return;
-      await fetch(`/api/admin/videos/${id}`, { method: 'DELETE' });
-      loadAdminVideos();
+      showConfirm(
+        'Удалить видео?',
+        'Видео будет удалено из списка для всех пользователей.',
+        async () => {
+          await fetch(`/api/admin/videos/${id}`, { method: 'DELETE' });
+          loadAdminVideos();
+          showToast('Видео удалено');
+        }
+      );
     }
 
     function showSection(name, e) {
