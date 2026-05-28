@@ -8,6 +8,8 @@ const fetch = require('node-fetch');
 const path = require('path');
 
 const app = express();
+app.set('trust proxy', 1); // Railway / Heroku reverse proxy
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
@@ -69,6 +71,14 @@ async function initDB() {
       last_login TIMESTAMPTZ
     )
   `);
+  // Migrate existing DB — add columns if missing
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT`,
+  ];
+  for (const sql of migrations) {
+    await pool.query(sql).catch(() => {});
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS videos (
       id SERIAL PRIMARY KEY,
